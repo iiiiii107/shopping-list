@@ -168,9 +168,18 @@ export function mergeIngredients(list) {
     if (!key) continue;
 
     if (!byItem.has(key)) {
-      byItem.set(key, { item: key, label: ingredient.item.trim(), amounts: [], from: [] });
+      byItem.set(key, {
+        item: key, label: ingredient.item.trim(), amounts: [], from: [],
+        // Every form of the name that was actually written down. Merging
+        // matches on the singular, so "1 onion" and "2 onions" become one
+        // entry — and which of the two words ends up on the list must not
+        // depend on which recipe happened to be read first.
+        forms: [],
+      });
     }
     const entry = byItem.get(key);
+    const written = ingredient.item.trim();
+    if (written && !entry.forms.includes(written)) entry.forms.push(written);
     if (ingredient.recipe && !entry.from.includes(ingredient.recipe)) {
       entry.from.push(ingredient.recipe);
     }
@@ -201,6 +210,28 @@ export function mergeIngredients(list) {
 }
 
 /** One merged entry, written the way it should appear on the list. */
+/**
+ * The name to print, in the form that agrees with the number in front of it.
+ *
+ * It only ever chooses between forms somebody actually typed, so it cannot
+ * invent a wrong word the way a pluralising rule would — but that is also its
+ * limit: given only "1 onion" twice it will say "2 onion", because nobody
+ * ever wrote the other word down. Longest-when-plural is crude and right far
+ * more often than it is wrong, which is the trade being made.
+ */
+export function labelFor(entry) {
+  const forms = entry.forms?.length ? entry.forms : [entry.label];
+  if (forms.length === 1) return forms[0];
+
+  // Only a bare count pluralises the noun. "250 ml milk" stays milk however
+  // many recipes it came from.
+  const count = entry.amounts?.find((a) => a.family === 'count');
+  const plural = count && count.base > 1;
+
+  const byLength = [...forms].sort((a, b) => a.length - b.length);
+  return plural ? byLength[byLength.length - 1] : byLength[0];
+}
+
 export function formatAmount(entry) {
   const parts = entry.amounts
     .filter((a) => a.base != null)

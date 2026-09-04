@@ -5,6 +5,9 @@ import {
 } from '../lib/theme.js';
 import { storage } from '../lib/storage.js';
 import { paletteEditor } from './palette.js';
+import {
+  syncConfigured, currentAccount, syncError, signIn, signOutOfSync,
+} from '../lib/sync.js';
 
 /* Settings.
 
@@ -24,6 +27,8 @@ export function renderSettings(scene) {
       ]),
     ]),
     el('div', { class: 'settings-sheet' }, [
+      accountSection(),
+
       section('You', [
         field('Name', el('input', {
           type: 'text',
@@ -110,6 +115,51 @@ export function renderSettings(scene) {
   ]);
 
   add(scene, page);
+}
+
+/* Signing in is what puts your lists on your other devices, and — once
+   sharing lands — what lets somebody else onto one. Everything works without
+   it; that is the point of saying so plainly rather than putting a wall in
+   front of the app. */
+function accountSection() {
+  if (!syncConfigured()) {
+    return section('Your account', [
+      el('p', { class: 'note', text: 'This copy of the app was built without a database attached, so lists stay on this device. Everything else works.' }),
+    ]);
+  }
+
+  const account = currentAccount();
+  const error = syncError();
+
+  if (!account) {
+    return section('Your account', [
+      el('div', { class: 'row' }, [
+        el('button', {
+          class: 'btn', type: 'button', text: 'Sign in with Google',
+          onClick: () => signIn().catch((err) => {
+            console.warn('Sign-in failed.', err);
+            toast('That did not work. Try again in a moment.');
+          }),
+        }),
+      ]),
+      el('p', { class: 'note', text: 'Your lists follow you to your other devices, and you can share one with somebody. Until then everything stays in this browser.' }),
+    ]);
+  }
+
+  return section('Your account', [
+    el('div', { class: 'account-row' }, [
+      account.photo && el('img', { class: 'avatar', src: account.photo, alt: '' }),
+      el('div', {}, [
+        el('div', { text: account.name || 'Signed in' }),
+        el('div', { class: 'note', text: account.email || '' }),
+      ]),
+      el('button', {
+        class: 'btn btn-secondary btn-sm', type: 'button', text: 'Sign out',
+        onClick: () => signOutOfSync().catch(() => toast('Could not sign out.')),
+      }),
+    ]),
+    error && el('p', { class: 'note', text: error }),
+  ]);
 }
 
 async function save(patch) {

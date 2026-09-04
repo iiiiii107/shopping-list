@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  compatible, toBase, fromBase, normaliseItem, mergeIngredients, formatAmount,
-} from './units.js';
+import { compatible, toBase, fromBase, normaliseItem, mergeIngredients, formatAmount, labelFor } from './units.js';
 import { parseIngredient } from './item.js';
 
 /** Shorthand: parse a line the way the editor would, then tag its recipe. */
@@ -117,3 +115,40 @@ describe('mergeIngredients', () => {
     expect(mergeIngredients([null, { item: '' }])).toEqual([]);
   });
 });
+
+describe('the name agrees with the number in front of it', () => {
+  /* "1 onion" and "2 onions" merge on the singular, so without this the list
+     printed whichever word the first recipe happened to use — meaning the
+     output changed with the order the recipes were read in. */
+  it('says onions when there are three of them', () => {
+    const merged = mergeIngredients([
+      { qty: 1, unit: '', item: 'onion' },
+      { qty: 2, unit: '', item: 'onions' },
+    ]);
+    expect(labelFor(merged[0])).toBe('onions');
+    expect(formatAmount(merged[0])).toBe('3');
+  });
+
+  it('and onion when there is one', () => {
+    const merged = mergeIngredients([
+      { qty: 1, unit: '', item: 'onions' },
+    ]);
+    // Only one form was ever written, so that is the one used.
+    expect(labelFor(merged[0])).toBe('onions');
+
+    const both = mergeIngredients([
+      { qty: 0.5, unit: '', item: 'onion' },
+      { qty: 0.5, unit: '', item: 'onions' },
+    ]);
+    expect(labelFor(both[0])).toBe('onion');
+  });
+
+  it('leaves a measured thing alone however much of it there is', () => {
+    const merged = mergeIngredients([
+      { qty: 100, unit: 'ml', item: 'milk' },
+      { qty: 150, unit: 'ml', item: 'milk' },
+    ]);
+    expect(labelFor(merged[0])).toBe('milk');
+    expect(formatAmount(merged[0])).toBe('250 ml');
+  });
+})

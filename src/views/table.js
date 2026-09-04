@@ -3,6 +3,7 @@ import { store } from '../lib/store.js';
 import { sortLists, progressOf, readingOrder, itemToText } from '../lib/list.js';
 import { PAPER_STOCKS } from '../lib/theme.js';
 import { importDialog } from './transfer.js';
+import { fromCookbookDialog } from './from-cookbook.js';
 
 /* The table: every list you have, lying about as sheets of paper.
 
@@ -21,6 +22,7 @@ function head() {
     el('h1', { text: 'Shopping' }),
     el('span', { class: 'greeting', text: greeting() }),
     el('div', { class: 'table-actions' }, [
+      iconButton('book', 'Build a list from your cookbook', { onClick: fromCookbookDialog }),
       iconButton('inbox', 'Bring in a list', { onClick: importList }),
       iconButton('plus', 'New list', { primary: true, onClick: () => newListDialog() }),
       iconLink('settings', 'Settings', '#/settings'),

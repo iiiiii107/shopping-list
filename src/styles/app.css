@@ -337,3 +337,41 @@ button:focus-visible,
 
 .import-form .field + .field { margin-top: 12px; }
 .import-form input[type='file'] { font-size: calc(12.5px * var(--text-scale)); }
+
+/* --- the account ----------------------------------------------------------- */
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.account-row > div:first-of-type,
+.account-row > div { flex: 1; }
+.account-row .note { margin: 0; }
+.account-row .avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--hair-strong);
+}
+
+/* --- building a list from the cookbook -------------------------------------- */
+
+.cookbook-form { display: grid; gap: 8px; }
+
+.week-option {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--hair-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background .14s ease, border-color .14s ease;
+}
+.week-option:hover { background: var(--accent-soft); border-color: var(--accent); }
+.week-option strong { font-family: var(--font-display); font-weight: 500; font-size: calc(16px * var(--text-scale)); }
+.week-option .note { margin: 0; }
