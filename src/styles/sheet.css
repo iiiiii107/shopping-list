@@ -1,0 +1,335 @@
+/* One list, as a sheet of paper.
+
+   Deliberately not a two-page spread: a shopping list is read one-handed,
+   upright, while walking. So it is a single sheet with a generous column and
+   nothing at the edges competing for the thumb. */
+
+.sheet-view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: clamp(14px, 2.5vw, 30px) clamp(12px, 3vw, 34px) 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sheet {
+  position: relative;
+  width: min(680px, 100%);
+  min-height: min(880px, 78vh);
+  padding: clamp(26px, 4vw, 48px) clamp(22px, 4vw, 46px) 64px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--paper-edge);
+  border-radius: 2px;
+  box-shadow: 0 16px 42px -22px var(--shadow-2), 0 1px 3px var(--shadow-1);
+}
+
+/* The tooth of the paper, over whatever stock is beneath it. */
+.sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--noise);
+  background-size: 180px 180px;
+  opacity: .05;
+  mix-blend-mode: multiply;
+}
+
+/* --- the header ---------------------------------------------------------- */
+/* Every field is edited where it sits. A field behind an Edit button is a
+   field you resent — that was the clearest thing to come out of the cookbook. */
+
+.sheet-head { margin-bottom: clamp(18px, 3vw, 30px); }
+
+.sheet-title {
+  font-family: var(--font-display);
+  font-size: calc(31px * var(--text-scale));
+  font-weight: 500;
+  color: var(--ink-deep);
+  line-height: 1.15;
+  outline: none;
+}
+
+.sheet-sub {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: calc(16px * var(--text-scale));
+  color: var(--muted);
+  margin-top: 2px;
+  outline: none;
+}
+
+.sheet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hair);
+  font-size: calc(13px * var(--text-scale));
+  color: var(--muted);
+}
+
+.sheet-meta > * { display: inline-flex; align-items: baseline; gap: 6px; }
+.sheet-meta .label { font-size: calc(10px * var(--text-scale)); }
+
+/* An empty optional field shows its placeholder only — no box, no border,
+   so an unused subtitle costs the page nothing. */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  opacity: .6;
+}
+[contenteditable]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.sheet-meta input[type='date'],
+.sheet-meta .meta-text {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: var(--ink);
+  min-width: 6ch;
+}
+.sheet-meta input[type='date']:hover,
+.sheet-meta .meta-text:hover { background: var(--hair); }
+
+/* --- sections and items -------------------------------------------------- */
+
+.sheet-section + .sheet-section { margin-top: clamp(18px, 3vw, 28px); }
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.section-label {
+  font-family: var(--font-display);
+  font-size: calc(18px * var(--text-scale));
+  color: var(--ink-deep);
+  outline: none;
+  flex: 1;
+}
+
+.section-head .btn-quiet { opacity: 0; transition: opacity .15s ease; }
+.section-head:hover .btn-quiet,
+.section-head:focus-within .btn-quiet { opacity: 1; }
+
+.items { list-style: none; margin: 0; padding: 0; }
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 5px 2px;
+  border-bottom: 1px solid transparent;
+}
+.item:hover { border-bottom-color: var(--hair); }
+
+/* The box you tick. Big enough for a thumb in a shop — 24px is the smallest
+   that is reliably hittable while walking, and this is the whole interaction
+   the app exists for. */
+.item-tick {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hair-strong);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--accent);
+  transition: border-color .14s ease, background .14s ease;
+}
+.item-tick:hover { border-color: var(--accent); background: var(--accent-soft); }
+.item-tick svg { width: 15px; height: 15px; fill: none; stroke: currentColor;
+                 stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.item-tick svg { opacity: 0; transition: opacity .12s ease; }
+.item.is-done .item-tick svg { opacity: 1; }
+
+.item-text {
+  flex: 1;
+  outline: none;
+  overflow-wrap: anywhere;
+  padding: 1px 2px;
+  border-radius: 3px;
+}
+
+/* Crossed off, and staying where it is. You can see what you have already
+   got, and untick a mistake — which is the point of leaving it in place. */
+.item.is-done .item-text { color: var(--muted); }
+
+.item .strike {
+  position: absolute;
+  left: 34px;
+  right: 6px;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  overflow: visible;
+}
+.item .strike path {
+  fill: none;
+  stroke: var(--strike);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: .8;
+}
+
+/* Who crossed it off, when more than one of you is shopping. */
+.item .by {
+  flex: none;
+  font-size: calc(10.5px * var(--text-scale));
+  color: var(--muted);
+  align-self: center;
+  white-space: nowrap;
+}
+
+.item-note {
+  display: block;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: calc(12.5px * var(--text-scale));
+  color: var(--muted);
+}
+
+/* The line you type the next item into: no box, just a rule, so the sheet
+   reads as paper with room left on it rather than as a form. */
+.item-new {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+}
+.item-new::before {
+  content: '';
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px dashed var(--hair-strong);
+  border-radius: 4px;
+}
+.item-new input {
+  flex: 1;
+  border: none;
+  border-bottom: 1px solid var(--hair);
+  border-radius: 0;
+  padding: 3px 2px;
+  background: none;
+}
+.item-new input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+
+/* --- the bar of actions --------------------------------------------------- */
+
+.sheet-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-top: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px clamp(12px, 3vw, 34px) calc(10px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--wood-1) 76%, transparent);
+  backdrop-filter: blur(7px);
+  color: var(--on-table);
+}
+.sheet-bar .spacer { flex: 1; }
+.sheet-bar .progress {
+  font-size: calc(12.5px * var(--text-scale));
+  color: var(--on-table-dim);
+  white-space: nowrap;
+}
+.sheet-bar .btn-icon,
+.sheet-bar .btn-secondary {
+  color: var(--on-table);
+  border-color: color-mix(in srgb, var(--on-table) 34%, transparent);
+}
+.sheet-bar .btn-icon:hover,
+.sheet-bar .btn-secondary:hover {
+  background: color-mix(in srgb, var(--on-table) 14%, transparent);
+  border-color: var(--on-table);
+  color: var(--on-table);
+}
+
+/* --- paper stocks --------------------------------------------------------- */
+/* Ruling is drawn from --paper-line so it follows the palette, and every
+   stock keeps the same margins, so changing paper never moves a single item. */
+
+.sheet[data-paper='ruled'] {
+  background-image: repeating-linear-gradient(
+    180deg, transparent 0 26px, var(--paper-line) 26px 27px);
+  background-position: 0 clamp(26px, 4vw, 48px);
+}
+
+.sheet[data-paper='grid'] {
+  background-image:
+    repeating-linear-gradient(180deg, transparent 0 21px, var(--paper-line) 21px 22px),
+    repeating-linear-gradient(90deg, transparent 0 21px, var(--paper-line) 21px 22px);
+}
+
+.sheet[data-paper='dots'] {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in srgb, var(--ink) 26%, transparent) 1px,
+    transparent 1.4px);
+  background-size: 22px 22px;
+}
+
+.sheet[data-paper='graph'] {
+  background-image:
+    repeating-linear-gradient(180deg, transparent 0 11px, var(--paper-line) 11px 12px),
+    repeating-linear-gradient(90deg, transparent 0 11px, var(--paper-line) 11px 12px),
+    repeating-linear-gradient(180deg, transparent 0 59px,
+      color-mix(in srgb, var(--ink) 14%, transparent) 59px 60px),
+    repeating-linear-gradient(90deg, transparent 0 59px,
+      color-mix(in srgb, var(--ink) 14%, transparent) 59px 60px);
+}
+
+/* Aged: no ruling, just an uneven warmth as though it has been in a pocket. */
+.sheet[data-paper='aged'] {
+  background-image:
+    radial-gradient(120% 90% at 8% 4%, color-mix(in srgb, var(--tag-4) 13%, transparent), transparent 58%),
+    radial-gradient(90% 80% at 96% 92%, color-mix(in srgb, var(--tag-4) 16%, transparent), transparent 62%);
+}
+.sheet[data-paper='aged']::after { opacity: .09; }
+
+.sheet[data-paper='margin'] {
+  background-image:
+    repeating-linear-gradient(180deg, transparent 0 26px, var(--paper-line) 26px 27px),
+    linear-gradient(90deg,
+      transparent calc(clamp(22px, 4vw, 46px) - 13px),
+      color-mix(in srgb, var(--tag-1) 40%, transparent) calc(clamp(22px, 4vw, 46px) - 13px)
+        calc(clamp(22px, 4vw, 46px) - 12px),
+      transparent calc(clamp(22px, 4vw, 46px) - 12px));
+  background-position: 0 clamp(26px, 4vw, 48px), 0 0;
+}
+
+/* A till receipt: narrow, monospaced, with a torn foot. The one stock that
+   changes the shape of the sheet rather than just its surface. */
+.sheet[data-paper='receipt'] {
+  width: min(400px, 100%);
+  font-family: 'SFMono-Regular', ui-monospace, 'Menlo', monospace;
+  padding-left: clamp(18px, 3vw, 30px);
+  padding-right: clamp(18px, 3vw, 30px);
+  border-radius: 0;
+  --mask: repeating-linear-gradient(90deg, #000 0 9px, transparent 9px 10px);
+}
+.sheet[data-paper='receipt'] .sheet-title,
+.sheet[data-paper='receipt'] .sheet-sub,
+.sheet[data-paper='receipt'] .section-label { font-family: inherit; font-style: normal; }

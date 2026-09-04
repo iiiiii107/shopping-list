@@ -1,0 +1,304 @@
+/* The table, the sheets lying on it, and the book at the corner.
+
+   Wood is drawn rather than photographed: growth bands and grain lines are
+   repeating gradients over the three --wood-* colours, with an feTurbulence
+   noise plate on top for tooth. A species change is therefore a variable
+   swap — sharp at any size, recoloured instantly, no bytes. Lifted from the
+   cook book's desk.css, minus the window and everything that lit it. */
+
+:root {
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* --- the table surface --------------------------------------------------- */
+
+.table-surface {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    /* Board seams. */
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 244px,
+      color-mix(in srgb, var(--wood-edge) 34%, transparent) 244px 246px,
+      color-mix(in srgb, #fff 5%, transparent) 246px 248px,
+      transparent 248px 252px
+    ),
+    /* Grain. Four periods sharing no common factor, so the eye never finds
+       the repeat — a single periodic gradient reads as woven fabric, which is
+       exactly what wood must not look like. */
+    repeating-linear-gradient(179deg, transparent 0 6px, color-mix(in srgb, var(--wood-3) 8%, transparent) 6px 7px),
+    repeating-linear-gradient(180.5deg, transparent 0 13px, color-mix(in srgb, var(--wood-3) 6%, transparent) 13px 15px),
+    repeating-linear-gradient(179.5deg, transparent 0 29px, color-mix(in srgb, var(--wood-3) 9%, transparent) 29px 30px),
+    repeating-linear-gradient(180deg, transparent 0 43px, color-mix(in srgb, var(--wood-3) 5%, transparent) 43px 47px),
+    /* Broad growth bands, angled a hair off true so the boards look sawn. */
+    repeating-linear-gradient(
+      179.4deg,
+      var(--wood-1) 0 calc(var(--wood-grain) * 1px),
+      var(--wood-2) calc(var(--wood-grain) * 1.7px) calc(var(--wood-grain) * 2.5px),
+      var(--wood-1) calc(var(--wood-grain) * 3.3px)
+    ),
+    var(--wood-1);
+}
+
+.table-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--noise);
+  background-size: 180px 180px;
+  opacity: .13;
+  mix-blend-mode: multiply;
+}
+
+/* --- the room ------------------------------------------------------------ */
+
+.scene {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: clamp(18px, 3vw, 34px) clamp(18px, 4vw, 44px) 4px;
+  color: var(--on-table);
+}
+
+.table-head h1 {
+  font-size: calc(27px * var(--text-scale));
+  color: var(--on-table);
+  letter-spacing: .01em;
+}
+
+.table-head .greeting {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--on-table-dim);
+  font-size: calc(15px * var(--text-scale));
+}
+
+.table-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* On the table, the quiet buttons sit on wood rather than paper, so they
+   need their own foreground — --ink is for text on a sheet. */
+.table-actions .btn-icon,
+.table-actions .btn-secondary {
+  color: var(--on-table);
+  border-color: color-mix(in srgb, var(--on-table) 34%, transparent);
+}
+.table-actions .btn-icon:hover,
+.table-actions .btn-secondary:hover {
+  background: color-mix(in srgb, var(--on-table) 14%, transparent);
+  border-color: var(--on-table);
+  color: var(--on-table);
+}
+
+/* --- sheets scattered on the table --------------------------------------- */
+
+.sheets {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: center;
+  gap: clamp(20px, 3.5vw, 46px);
+  padding: clamp(24px, 4vw, 52px) clamp(18px, 4vw, 44px) 140px;
+}
+
+/* Each sheet is nudged and turned by a hash of its own id, so the scatter is
+   the same every time the table is opened — paper that rearranges itself on
+   every reload is unsettling rather than charming. */
+.sheet-card {
+  --tilt: 0deg;
+  --nudge: 0px;
+  position: relative;
+  width: clamp(190px, 21vw, 250px);
+  min-height: 244px;
+  padding: 20px 18px 16px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--paper-edge);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 10px 26px -16px var(--shadow-2), 0 1px 2px var(--shadow-1);
+  transform: rotate(var(--tilt)) translateY(var(--nudge));
+  transition: transform .22s cubic-bezier(.2, .7, .3, 1), box-shadow .22s ease;
+}
+
+.sheet-card:hover,
+.sheet-card:focus-visible {
+  transform: rotate(calc(var(--tilt) * .4)) translateY(calc(var(--nudge) - 6px));
+  box-shadow: 0 18px 38px -18px var(--shadow-2), 0 1px 2px var(--shadow-1);
+}
+
+/* The coloured tab at the top, which is how you tell one list from another
+   across a table without reading any of them. */
+.sheet-card::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: -1px;
+  width: 46px;
+  height: 5px;
+  border-radius: 0 0 3px 3px;
+  background: var(--sheet-tag, var(--accent));
+}
+
+.sheet-card h2 {
+  font-size: calc(18.5px * var(--text-scale));
+  margin-bottom: 2px;
+  overflow-wrap: anywhere;
+}
+
+.sheet-card .sub {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--muted);
+  font-size: calc(13.5px * var(--text-scale));
+}
+
+.sheet-card .peek {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(12.5px * var(--text-scale));
+  color: var(--muted);
+  display: grid;
+  gap: 3px;
+}
+.sheet-card .peek li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-card .peek li.is-done { text-decoration: line-through; opacity: .55; }
+
+.sheet-card .count {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
+  font-size: calc(11px * var(--text-scale));
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* A shared list says so on the table, before you open it. */
+.sheet-card .shared-mark { color: var(--accent); }
+
+.table-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--on-table);
+  max-width: 34ch;
+}
+.table-empty p {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: calc(17px * var(--text-scale));
+  color: var(--on-table-dim);
+}
+
+/* --- the door to the cookbook -------------------------------------------- */
+/* A book lying at the corner of the table with most of itself off the edge.
+   It is a link, not a decorated div: it is keyboard-reachable, it has a real
+   href, and middle-clicking it opens the cookbook in a new tab. */
+
+.cookbook-door {
+  position: fixed;
+  left: 0;
+  bottom: clamp(18px, 5vh, 54px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  text-decoration: none;
+  /* Most of the book is past the left edge; hovering slides it out. */
+  transform: translateX(-58%);
+  transition: transform .28s cubic-bezier(.2, .7, .3, 1);
+}
+
+.cookbook-door:hover,
+.cookbook-door:focus-visible {
+  transform: translateX(-4px);
+}
+
+.cookbook-door .book {
+  width: 118px;
+  height: 152px;
+  flex: none;
+  border-radius: 2px 5px 5px 2px;
+  background: var(--accent);
+  box-shadow: 8px 10px 26px -12px var(--shadow-2);
+  position: relative;
+  overflow: hidden;
+}
+
+/* The spine: a darker band down the bound edge, with two blind-tooled rules
+   across it the way a cloth binding has. */
+.cookbook-door .book::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 26px;
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--accent) 60%, #000) 0%,
+      color-mix(in srgb, var(--accent) 82%, #000) 62%,
+      color-mix(in srgb, var(--accent) 96%, #fff) 100%);
+}
+.cookbook-door .book::after {
+  content: '';
+  position: absolute;
+  left: 38px;
+  right: 14px;
+  top: 26px;
+  bottom: 26px;
+  border: 1px solid color-mix(in srgb, #fff 26%, transparent);
+  border-radius: 2px;
+}
+
+.cookbook-door .plate {
+  font-family: var(--font-display);
+  font-size: calc(13.5px * var(--text-scale));
+  color: var(--on-table);
+  background: color-mix(in srgb, #000 42%, transparent);
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity .2s ease, transform .2s ease;
+  pointer-events: none;
+}
+
+.cookbook-door:hover .plate,
+.cookbook-door:focus-visible .plate {
+  opacity: 1;
+  transform: none;
+}
+
+/* On a phone the table is narrow and the book would sit on top of the sheets.
+   It shrinks and stays tucked in rather than being taken away — it is the
+   only way back to the recipes. */
+@media (max-width: 620px) {
+  .cookbook-door { bottom: 12px; }
+  .cookbook-door .book { width: 76px; height: 98px; }
+  .sheets { padding-bottom: 120px; }
+}

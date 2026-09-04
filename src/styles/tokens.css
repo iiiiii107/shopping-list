@@ -1,0 +1,183 @@
+/* Design tokens.
+
+   The palette is near-neutral by design: paper, ink and warm greys carry the
+   whole interface, and one accent is spent only where it earns attention.
+   The supporting hues survive solely as sheet tags, where colour is doing a
+   job — telling one list from another across a table.
+
+   Structure follows the cook book: light values on bare :root, then the dark
+   set duplicated into a prefers-color-scheme block (guarded so an explicit
+   light choice wins) and a [data-theme="dark"] block (so an explicit dark
+   choice wins over the OS). Only colours are redefined in dark.
+
+   There is no lighting layer here. The cook book's window, blinds and lamp
+   are gone on purpose: this app gets read one-handed under supermarket
+   strip-lights, where a shaft of sun across the page costs contrast and buys
+   nothing.
+
+   Every colour is overridable at runtime — settings writes these same custom
+   properties onto <html>, so nothing anywhere else hard-codes one. */
+
+:root {
+  /* --- the sheet ------------------------------------------------------- */
+  --paper:       #FAF8F3;
+  --paper-edge:  #E8E2D6;
+  --paper-line:  rgba(43, 40, 37, .07);
+  --margin-rule: rgba(43, 40, 37, .16);
+
+  /* --- ink ------------------------------------------------------------- */
+  /* Text written straight onto the table — never on paper. The table is wood
+     in both themes, so this deliberately does NOT flip the way --paper does. */
+  --on-table:     #F7F2E8;
+  --on-table-dim: rgba(247, 242, 232, .72);
+
+  --ink:         #2B2825;
+  --ink-deep:    #191714;
+  --muted:       #857D73;
+  --hair:        rgba(43, 40, 37, .09);
+  --hair-strong: rgba(43, 40, 37, .17);
+
+  /* --- the one accent -------------------------------------------------- */
+  --accent:      #46607A;
+  --accent-soft: rgba(70, 96, 122, .09);
+
+  /* Supporting hues. Reserved for sheet tags — never for interface. */
+  --tag-1: #46607A;  --tag-2: #5F6B4A;  --tag-3: #47726A;
+  --tag-4: #8A7B52;  --tag-5: #6B5566;  --tag-6: #7A6A5C;
+
+  /* --- crossing off ----------------------------------------------------- */
+  --strike: #6B6660;
+
+  /* --- shadows --------------------------------------------------------- */
+  /* Deliberately light. A heavy drop shadow is the fastest way to make an
+     interface look like a toy. */
+  --shadow-1: rgba(40, 34, 28, .06);
+  --shadow-2: rgba(40, 34, 28, .22);
+
+  /* --- buttons --------------------------------------------------------- */
+  /* Primary follows the accent, so changing the accent in settings changes
+     every button with it — there is no separate button colour to forget. */
+  --btn-face: var(--accent);
+  --btn-text: #FBF8F3;
+
+  /* --- type ------------------------------------------------------------ */
+  --font-display: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
+  --font-body: 'Inter', -apple-system, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --text-scale: 1;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+/* --- night ------------------------------------------------------------- */
+/* Duplicated deliberately: the media query catches "System", the attribute
+   selector catches an explicit choice, and neither can be expressed in terms
+   of the other without one of the two silently losing. */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper:       #201E1B;
+    --paper-edge:  #141210;
+    --paper-line:  rgba(230, 225, 216, .07);
+    --margin-rule: rgba(230, 225, 216, .18);
+
+    --ink:         #E6E1D8;
+    --ink-deep:    #F5F1E8;
+    --muted:       #948C81;
+    --hair:        rgba(230, 225, 216, .10);
+    --hair-strong: rgba(230, 225, 216, .20);
+
+    --accent:      #8AA6C2;
+    --accent-soft: rgba(138, 166, 194, .13);
+
+    --tag-1: #8AA6C2;  --tag-2: #929C77;  --tag-3: #79A79B;
+    --tag-4: #BFAE7C;  --tag-5: #A08CA0;  --tag-6: #AC9C8A;
+
+    --strike:   #ADA79E;
+
+    --shadow-1: rgba(0, 0, 0, .34);
+    --shadow-2: rgba(0, 0, 0, .60);
+
+    --btn-text: #14120F;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper:       #201E1B;
+  --paper-edge:  #141210;
+  --paper-line:  rgba(230, 225, 216, .07);
+  --margin-rule: rgba(230, 225, 216, .18);
+
+  --ink:         #E6E1D8;
+  --ink-deep:    #F5F1E8;
+  --muted:       #948C81;
+  --hair:        rgba(230, 225, 216, .10);
+  --hair-strong: rgba(230, 225, 216, .20);
+
+  --accent:      #8AA6C2;
+  --accent-soft: rgba(138, 166, 194, .13);
+
+  --tag-1: #8AA6C2;  --tag-2: #929C77;  --tag-3: #79A79B;
+  --tag-4: #BFAE7C;  --tag-5: #A08CA0;  --tag-6: #AC9C8A;
+
+  --strike:   #ADA79E;
+
+  --shadow-1: rgba(0, 0, 0, .34);
+  --shadow-2: rgba(0, 0, 0, .60);
+
+  --btn-text: #14120F;
+}
+
+/* --- the table ---------------------------------------------------------- */
+/* Wood is drawn, never photographed: three colours plus a grain scale, so a
+   species change is a variable swap and stays sharp at any size. The values
+   are muted — the table is a surface the paper sits on, not the subject. */
+
+:root,
+:root[data-wood='oak'] {
+  --wood-1: #A88A64;   /* the boards          */
+  --wood-2: #9A7B57;   /* darker growth bands */
+  --wood-3: #7E6242;   /* the grain lines     */
+  --wood-edge: #6E5438;
+  --wood-grain: 38;    /* band spacing, px    */
+}
+
+:root[data-wood='walnut'] {
+  --wood-1: #5E463A;
+  --wood-2: #513A2F;
+  --wood-3: #3D2A21;
+  --wood-edge: #2E1F18;
+  --wood-grain: 44;
+}
+
+:root[data-wood='pine'] {
+  --wood-1: #CDB794;
+  --wood-2: #BFA783;
+  --wood-3: #A98D66;
+  --wood-edge: #947954;
+  --wood-grain: 30;
+}
+
+:root[data-wood='cherry'] {
+  --wood-1: #94604A;
+  --wood-2: #85543F;
+  --wood-3: #6B412F;
+  --wood-edge: #573224;
+  --wood-grain: 40;
+}
+
+:root[data-wood='whitewash'] {
+  --wood-1: #D6CDBF;
+  --wood-2: #C9BFAF;
+  --wood-3: #B3A794;
+  --wood-edge: #9E9280;
+  --wood-grain: 34;
+}
+
+:root[data-wood='ebony'] {
+  --wood-1: #322F2B;
+  --wood-2: #2A2724;
+  --wood-3: #1D1B18;
+  --wood-edge: #131211;
+  --wood-grain: 48;
+}
