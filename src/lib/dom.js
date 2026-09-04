@@ -302,9 +302,14 @@ export function claimBodyFlag(name, node) {
   document.body.dataset[name] = token;
 
   const release = () => {
-    // Someone else has claimed it since; leave theirs alone.
-    if (document.body.dataset[name] === token) delete document.body.dataset[name];
     observer.disconnect();
+    // Someone else has claimed it since; leave theirs alone.
+    if (document.body.dataset[name] !== token) return;
+    delete document.body.dataset[name];
+    /* Anyone holding something back until the typing stops needs to hear
+       about it — otherwise a change that arrived from another person mid-word
+       would sit in a queue until the next unrelated render. */
+    document.dispatchEvent(new CustomEvent('bodyflag', { detail: { name } }));
   };
 
   const observer = new MutationObserver(() => {

@@ -236,7 +236,7 @@ describe('sending a list and bringing one in', () => {
     const { renderSheet } = await import('./sheet.js');
     renderSheet(host, list.id);
 
-    host.querySelector('[aria-label="Send this list"]').click();
+    host.querySelector('[aria-label="Send this list as a file"]').click();
     await new Promise((r) => setTimeout(r, 0));
 
     const preview = document.querySelector('.md-preview');
@@ -244,6 +244,104 @@ describe('sending a list and bringing one in', () => {
     expect(preview.value).toContain('# Weekly shop');
     expect(preview.value).toContain('- [ ] 250 ml milk');
     expect(handlerErrors).toEqual([]);
+  });
+});
+
+describe('a list that lives somewhere else', () => {
+  /* A shared list is not in the store at all: it is a document of its own
+     with an item beneath it for every line, because saving a whole list at
+     once means whoever writes second sends a version that never contained the
+     other person's item. The view is written once and handed whichever
+     backend the list has — so the thing worth testing here is that it really
+     does go through the one it was handed, and never round it. */
+  function fakeLive(list) {
+    const calls = [];
+    const api = { shared: true };
+    for (const name of ['updateList', 'addItem', 'updateItem', 'toggleItem',
+      'removeItem', 'clearDone', 'addSection', 'updateSection', 'removeSection']) {
+      api[name] = (...args) => { calls.push([name, ...args]); return Promise.resolve(); };
+    }
+    api.addItem = (...args) => {
+      calls.push(['addItem', ...args]);
+      return { id: 'new', text: String(args[1]), qty: null, unit: '', note: '', done: false, order: 1 };
+    };
+    return { api, calls, list };
+  }
+
+  async function sharedSheet() {
+    const { list } = await seed();
+    const shared = { ...JSON.parse(JSON.stringify(list)), shared: true, owner: 'me', members: ['me'] };
+    const fake = fakeLive(shared);
+    const { paintForTest } = await import('./sheet.js');
+    paintForTest(host, shared, fake.api);
+    return fake;
+  }
+
+  it('crossing something off goes to the shared list, not to the store', async () => {
+    const { store } = await import('../lib/store.js');
+    const fake = await sharedSheet();
+    const before = JSON.stringify(store.state.lists);
+
+    host.querySelector('.item:not(.is-done) .item-tick').click();
+    await Promise.resolve();
+
+    expect(fake.calls.map((c) => c[0])).toContain('toggleItem');
+    // And the local copy of anything was left completely alone.
+    expect(JSON.stringify(store.state.lists)).toBe(before);
+    expect(handlerErrors).toEqual([]);
+  });
+
+  it('adding, renaming and clearing all go the same way', async () => {
+    const fake = await sharedSheet();
+
+    const input = host.querySelector('.item-new input');
+    input.dispatchEvent(new window.FocusEvent('focus'));
+    input.value = 'olives';
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    const title = host.querySelector('.sheet-title');
+    title.dispatchEvent(new window.FocusEvent('focus'));
+    title.textContent = 'Saturday';
+    title.dispatchEvent(new window.FocusEvent('blur'));
+
+    host.querySelector('[aria-label="Clear crossed off"]')
+      ?? [...host.querySelectorAll('button')].find((b) => b.textContent === 'Clear crossed off').click();
+
+    await Promise.resolve();
+    const names = fake.calls.map((c) => c[0]);
+    expect(names).toContain('addItem');
+    expect(names).toContain('updateList');
+    expect(handlerErrors).toEqual([]);
+  });
+
+  it('everything on it still renders and nothing on it is dead', async () => {
+    await sharedSheet();
+    expect(await clickEverything(host)).toBeGreaterThan(0);
+    expect(handlerErrors, 'a button on a shared list threw').toEqual([]);
+  });
+
+  it('shows who else has it open', async () => {
+    const { list } = await seed();
+    const shared = { ...JSON.parse(JSON.stringify(list)), shared: true };
+    const { paintForTest } = await import('./sheet.js');
+    paintForTest(host, shared, fakeLive(shared).api, new URLSearchParams(), [
+      { uid: 'u1', name: 'Anna', photo: '' },
+      { uid: 'u2', name: 'Bo', photo: '' },
+    ]);
+
+    const faces = document.querySelectorAll('.sheet-bar .who .face');
+    expect(faces).toHaveLength(2);
+    expect(faces[0].textContent).toBe('A');
+    expect(faces[0].title).toMatch(/Anna is here/);
+  });
+
+  /* Signed out with no database attached, an unknown id is a list you threw
+     away — not one somebody shared, because sharing is not even possible. */
+  it('an unknown list still reads as gone when sharing is impossible', async () => {
+    await seed();
+    const { renderSheet } = await import('./sheet.js');
+    renderSheet(host, 'no-such-list');
+    expect(host.textContent).toMatch(/not here any more/i);
   });
 });
 

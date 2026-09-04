@@ -313,3 +313,12 @@
      anyway — inside a list you go back to the table first. */
   body:not([data-view='table']) .cookbook-door { display: none; }
 }
+
+/* A list somebody has asked you onto: on the table, but not yet yours. */
+.sheet-card.is-invitation {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--paper) 92%, var(--accent));
+}
+.sheet-card.is-invitation .label { color: var(--accent); }
+.sheet-card.is-invitation .count span { color: var(--accent); }

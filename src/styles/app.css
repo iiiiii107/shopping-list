@@ -375,3 +375,39 @@ button:focus-visible,
 .week-option:hover { background: var(--accent-soft); border-color: var(--accent); }
 .week-option strong { font-family: var(--font-display); font-weight: 500; font-size: calc(16px * var(--text-scale)); }
 .week-option .note { margin: 0; }
+
+/* --- sharing --------------------------------------------------------------- */
+
+.who { display: inline-flex; align-items: center; gap: -4px; }
+.who .face {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--btn-text);
+  border: 1.5px solid var(--wood-1);
+  margin-left: -6px;
+}
+.who .face:first-child { margin-left: 0; }
+.who .face.more { background: var(--muted); }
+
+.share-manage .people {
+  list-style: none;
+  margin: 4px 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: calc(13.5px * var(--text-scale));
+}
+.share-manage .people li { display: flex; align-items: center; gap: 8px; }
+.share-manage .people .note { margin: 0; }
+.share-manage .people .pending span:first-child { flex: 1; }
+
+.check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.check input { width: 16px; height: 16px; }
+
+.share-manage .row input[type='text'],
+.share-manage .row input[type='email'] { flex: 1; }

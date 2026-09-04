@@ -4,6 +4,8 @@ import { sortLists, progressOf, readingOrder, itemToText } from '../lib/list.js'
 import { PAPER_STOCKS } from '../lib/theme.js';
 import { importDialog } from './transfer.js';
 import { fromCookbookDialog } from './from-cookbook.js';
+import { myShared, join } from '../lib/share.js';
+import { currentAccount, syncConfigured, onAccountChange } from '../lib/sync.js';
 
 /* The table: every list you have, lying about as sheets of paper.
 
@@ -11,10 +13,45 @@ import { fromCookbookDialog } from './from-cookbook.js';
    the arrangement is the same every time you open the app. Paper that shuffles
    itself on each reload reads as a bug, not as charm. */
 
-export function renderTable(scene) {
-  const lists = sortLists(store.state.lists);
+/* Shared lists do not live in the local store, so they arrive separately and
+   a moment later. Held here rather than re-fetched on every render: the table
+   is drawn again on every keystroke elsewhere in the app, and a query per
+   keystroke would be both slow and rude. */
+let sharedCache = { mine: [], invitations: [] };
+let fetching = null;
 
-  add(scene, head(), lists.length ? sheets(lists) : empty());
+function refreshShared(onDone) {
+  if (!syncConfigured() || !currentAccount()) {
+    sharedCache = { mine: [], invitations: [] };
+    return;
+  }
+  if (fetching) return;
+  fetching = myShared()
+    .then((next) => { sharedCache = next; onDone?.(); })
+    .catch((err) => console.warn('Could not look up your shared lists.', err))
+    .finally(() => { fetching = null; });
+}
+
+// Signing in or out changes what there is to fetch.
+onAccountChange(() => { sharedCache = { mine: [], invitations: [] }; });
+
+export function renderTable(scene) {
+  const own = store.state.lists;
+  const lists = sortLists([...own, ...sharedCache.mine]);
+
+  add(scene, head(), lists.length || sharedCache.invitations.length
+    ? el('div', { class: 'sheets' }, [
+        ...sharedCache.invitations.map(invitation),
+        ...lists.map(card),
+      ])
+    : empty());
+
+  /* Re-render once they arrive, but only if this table is still the thing on
+     screen — otherwise a slow query would tear down whatever you opened while
+     you were waiting for it. */
+  refreshShared(() => {
+    if (document.body.dataset.view === 'table') store.emit();
+  });
 }
 
 function head() {
@@ -33,7 +70,10 @@ function head() {
 function greeting() {
   const { lists, settings } = store.state;
   const left = lists.reduce((n, list) => n + progressOf(list).total - progressOf(list).done, 0);
-  if (!lists.length) return `Nothing to buy yet, ${chefName(settings.profile)}`;
+  if (!lists.length && !sharedCache.mine.length) {
+    return `Nothing to buy yet, ${chefName(settings.profile)}`;
+  }
+  if (!lists.length) return 'Shared lists only';
   if (!left) return 'Everything crossed off';
   return `${left} still to find`;
 }
@@ -48,8 +88,28 @@ function empty() {
   ]);
 }
 
-function sheets(lists) {
-  return el('div', { class: 'sheets' }, lists.map(card));
+/* A list somebody has asked you onto, sitting on the table as an envelope
+   rather than a sheet — it is not yours until you open it. */
+function invitation(list) {
+  return el('button', {
+    class: 'sheet-card is-invitation',
+    type: 'button',
+    onClick: async () => {
+      try {
+        await join(list.id);
+      } catch (err) {
+        console.warn('Could not join that list.', err);
+        toast('That did not work. The list may have been thrown away.');
+        return;
+      }
+      location.hash = `#/list/${list.id}?shared=1`;
+    },
+  }, [
+    el('span', { class: 'label', text: 'Shared with you' }),
+    el('h2', { text: list.title || 'A shopping list' }),
+    list.subtitle && el('div', { class: 'sub', text: list.subtitle }),
+    el('div', { class: 'count' }, [el('span', { text: 'open it' })]),
+  ]);
 }
 
 function card(list) {
@@ -71,7 +131,9 @@ function card(list) {
     type: 'button',
     style: `--tilt:${tilt.toFixed(2)}deg; --nudge:${nudge.toFixed(1)}px; --sheet-tag:${tag}`,
     dataset: { paper: list.paper || 'plain' },
-    onClick: () => { location.hash = `#/list/${list.id}`; },
+    onClick: () => {
+      location.hash = list.shared ? `#/list/${list.id}?shared=1` : `#/list/${list.id}`;
+    },
   }, [
     el('h2', { text: list.title }),
     list.subtitle && el('div', { class: 'sub', text: list.subtitle }),
