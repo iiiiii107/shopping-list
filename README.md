@@ -47,3 +47,21 @@ exists because in the cook book the unit tests were green while a Done button
 threw a ReferenceError on every click — an exception inside a click handler
 never comes back out of `.click()`, so the sweep listens for `window.onerror`
 instead. Sabotage a handler and watch it fail before trusting it.
+
+## Security rules
+
+`firestore.rules` is the whole project's rules file, not just this app's — the
+same Firebase project hosts the cookbook and two other apps, so the file is
+kept identical in both repos and published from either.
+
+```
+npm run test:rules
+```
+
+runs them against the real rules engine in the Firestore emulator. It needs a
+JVM; `brew install openjdk` is enough, and the script puts it on PATH itself
+rather than asking you to edit your shell profile.
+
+These are worth running before publishing. Writing them turned up four real
+holes in rules that looked right, including a recursive wildcard that silently
+overrode every check above it.

@@ -1,0 +1,187 @@
+rules_version = '2';
+
+/* Everything is filed under the signed-in user and nobody else can reach it,
+   with one deliberate exception: a share, which several people hold together.
+
+   Recipes are their own documents rather than fields in one blob — a single
+   document is capped at 1 MB and a cookbook grows without limit. */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Everything under a user id belongs to that user and nobody else. This
+    // covers users/{uid}/app/cookbook and the users/{uid}/recipes collection,
+    // and leaves the sibling apps' own documents in this project untouched —
+    // 10-minutes-to-spare owns app/state, calendartospare owns app/calendar.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    /* A shared week, or later a shared cookbook.
+
+       The document id is the capability: it is unguessable, and knowing it is
+       what lets you join. That is the whole security model, and it is the
+       honest one — an invite sent by email delivers the same id, so a
+       forwarded invite works exactly as well as the original. Right for a
+       meal plan between people who live together; worth knowing before
+       anything private goes in one. */
+    match /shares/{shareId} {
+      function signedIn() {
+        return request.auth != null;
+      }
+      function member() {
+        return signedIn() && request.auth.uid in resource.data.memberIds;
+      }
+      // Adding yourself to the list, and touching nothing else. This is how
+      // someone holding the link gets in; they cannot read the share until
+      // the write has gone through.
+      function joiningSelf() {
+        return signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds'])
+          && request.resource.data.memberIds.toSet()
+             == resource.data.memberIds.toSet().union([request.auth.uid].toSet());
+      }
+
+      allow read: if member();
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.memberIds == [request.auth.uid];
+      allow update: if member() || joiningSelf();
+      // Only whoever made it can destroy it. Everyone else leaves instead,
+      // which is an update that takes their own id back out.
+      allow delete: if signedIn() && request.auth.uid == resource.data.ownerId;
+
+      // A shared cookbook's recipes. Same membership, checked against the
+      // parent — a recipe is not readable by anyone the book is not.
+      match /recipes/{recipeId} {
+        allow read, write: if signedIn() && request.auth.uid in
+          get(/databases/$(database)/documents/shares/$(shareId)).data.memberIds;
+      }
+    }
+
+
+    /* A shopping list several people write on at once.
+
+       This is the one place in the project that is NOT a blob. Every item is
+       its own document, because two people adding to one list is the ordinary
+       case here rather than an edge one — and saving a whole list at once
+       means whoever writes second sends a version that never contained the
+       other's item. Per-document writes cannot lose each other.
+
+       Two ways in, and unlike the cook book's shares the difference is real:
+
+       - Invited by address. The rule compares against the email on the
+         caller's own Google token, so knowing the list id is not enough.
+       - Anyone with the link, which is off unless it is deliberately turned
+         on. Then the id IS the capability, exactly as it is for a share, and
+         the app says so in those words before switching it on.
+    */
+    match /lists/{listId} {
+      function signedIn() {
+        return request.auth != null;
+      }
+      /* `d` is the list's own document — passed in, because inside a
+         subcollection `resource.data` is the item, not the list.
+
+         Every field is checked for existence before it is read. Rules are
+         evaluated symbolically for a query, against constraints rather than
+         against a document, so an unguarded `d.members` raised "Property
+         members is undefined" and refused a perfectly legitimate search for
+         one's own invitations. */
+      function mayUse(d) {
+        return signedIn() && (
+          request.auth.uid in d.get('members', [])
+          || request.auth.token.email in d.get('invited', [])
+          || d.get('linkOpen', false) == true
+        );
+      }
+
+      function isOwner() {
+        return signedIn() && request.auth.uid == resource.data.get('owner', '');
+      }
+
+      /* Who is on the list is the owner's business, and nobody else's.
+
+         The first attempt at this only stopped a member locking *themselves*
+         out, which let any member throw the owner off and keep the list. The
+         emulator caught it. Membership now changes in exactly three ways:
+         the owner edits it, somebody invited joins, or somebody leaves. */
+      function touchesMembership() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['members', 'invited', 'linkOpen', 'owner']);
+      }
+
+      // Accepting an invitation, or walking in through an open link. Adds
+      // the caller and touches nothing else.
+      function joiningSelf() {
+        return signedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+          && request.resource.data.members.toSet()
+             == resource.data.members.toSet().union([request.auth.uid].toSet())
+          && (request.auth.token.email in resource.data.get('invited', [])
+              || resource.data.get('linkOpen', false) == true);
+      }
+
+      // Taking your own name off, and nobody else's.
+      function leaving() {
+        return signedIn()
+          && request.auth.uid in resource.data.get('members', [])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+          && request.resource.data.members.toSet()
+             == resource.data.members.toSet().difference([request.auth.uid].toSet());
+      }
+      function header() {
+        return get(/databases/$(database)/documents/lists/$(listId)).data;
+      }
+
+      allow read: if mayUse(resource.data);
+      /* Anyone on the list may write what is *on* it — the title, the shop,
+         the headings. Only the owner may change who can see it. */
+      allow update: if isOwner()
+        || joiningSelf()
+        || leaving()
+        || (mayUse(resource.data) && !touchesMembership());
+      allow create: if signedIn()
+        && request.resource.data.owner == request.auth.uid
+        && request.auth.uid in request.resource.data.members;
+      // Only whoever made it can destroy it. Everyone else leaves instead,
+      // which is an update taking their own id back out of members.
+      allow delete: if signedIn() && request.auth.uid == resource.data.owner;
+
+      /* The items, and who is looking at the list right now. Same membership
+         as the list itself, checked against the parent — an item is not
+         readable by anyone the list is not.
+
+         Named explicitly rather than matched with a recursive wildcard. In
+         rules version 2 a recursive wildcard matches ZERO or more segments,
+         so `match /{document=**}` here also matched the list document itself
+         — and since rules are OR'd, its `allow write` quietly overrode every
+         check above it. Any member could then delete the list, or rewrite
+         `members` to lock everybody else out. The emulator caught both. */
+      match /items/{itemId} {
+        allow read, write: if mayUse(header());
+      }
+      match /presence/{personId} {
+        allow read: if mayUse(header());
+        // You may only say that *you* are here.
+        allow write: if mayUse(header()) && personId == request.auth.uid;
+      }
+    }
+
+    /* An invitation waiting for someone to sign in and find it.
+
+       Readable only by the address it was sent to: the rule compares against
+       the email on the caller's own Google token, so a query for anyone
+       else's invitations is refused rather than answered emptily. */
+    match /invites/{inviteId} {
+      allow read: if request.auth != null
+        && request.auth.token.email == resource.data.email;
+      allow create: if request.auth != null
+        && request.resource.data.fromId == request.auth.uid;
+      // The recipient tidies it away on accepting; the sender can withdraw it.
+      allow delete: if request.auth != null && (
+        request.auth.token.email == resource.data.email
+        || request.auth.uid == resource.data.fromId
+      );
+    }
+  }
+}
