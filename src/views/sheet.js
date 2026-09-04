@@ -95,7 +95,7 @@ function body(list) {
     if (section) add(group, sectionHead(list, section));
 
     const ul = el('ul', { class: 'items' }, items.map((item) => itemRow(list, item)));
-    add(group, ul, newItemLine(list, section?.id || ''));
+    add(group, ul, newItemLine(list, section?.id || '', ul));
     add(wrap, group);
   }
 
@@ -162,12 +162,17 @@ function itemRow(list, item) {
     },
   });
 
-  add(row, tick, text);
+  /* The stroke lives in a holder that shrink-wraps the words, so it runs
+     through the text and stops — a line carrying on across empty paper is
+     what a text-decoration does, not what a pen does. */
+  const hold = el('span', { class: 'item-hold' }, [text]);
 
-  // The strike is drawn, not a text-decoration line: four hand-wobbled paths
-  // picked by a hash of the item's id, so no two crossings-out are identical
-  // and the same item is always crossed the same way.
-  if (item.done) add(row, strikeSvg(Math.floor(hashUnit(item.id) * 4)));
+  // Drawn, not a text-decoration line: four hand-wobbled paths picked by a
+  // hash of the item's id, so no two crossings-out are identical and the same
+  // item is always crossed the same way.
+  if (item.done) add(hold, strikeSvg(Math.floor(hashUnit(item.id) * 4)));
+
+  add(row, tick, hold);
   if (item.done && item.doneBy) {
     add(row, el('span', { class: 'by', text: shortName(item.doneBy) }));
   }
@@ -180,30 +185,49 @@ function shortName(email) {
   return String(email).split('@')[0].slice(0, 12);
 }
 
-function newItemLine(list, sectionId) {
+function newItemLine(list, sectionId, ul) {
   const input = el('input', {
     type: 'text',
     placeholder: 'Add something',
     'aria-label': 'Add something to the list',
   });
 
-  // Enter adds and stays put, so a whole list can be typed in one go without
-  // ever reaching for the mouse.
+  /* Typing a whole list in one go is the main way anyone uses this, so Enter
+     adds and stays put.
+
+     That means holding off the re-render. Saving fires a change, a change
+     rebuilds this view, and the rebuild would replace the very input being
+     typed into — which is how the first version of this lost focus after the
+     first item and quietly swallowed the second and third. So the line claims
+     the `editing` flag while it has focus and appends the new row itself; the
+     next ordinary render, after blur, redraws it all properly anyway. */
+  let release = null;
+  input.addEventListener('focus', () => { release = claimBodyFlag('editing', input); });
+  input.addEventListener('blur', () => { release?.(); release = null; });
+
   input.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     const text = input.value.trim();
     if (!text) return;
-    store.addItem(list.id, text, sectionId);
+
+    const item = store.addItem(list.id, text, sectionId);
     input.value = '';
-    // The store change rebuilds the view; put the caret back where it was.
-    const key = sectionId || 'loose';
-    requestAnimationFrame(() => {
-      document.querySelector(`[data-add='${key}'] input`)?.focus();
-    });
+    if (item) {
+      ul.append(itemRow(list, item));
+      countUp(list);
+    }
   });
 
   return el('div', { class: 'item-new', dataset: { add: sectionId || 'loose' } }, [input]);
+}
+
+/* The tally in the bar, kept honest while the re-render is held off. Without
+   this it would sit at "0 of 2" through a dozen more items being typed. */
+function countUp(list) {
+  const { done, total } = progressOf(list);
+  const node = document.querySelector('.sheet-bar .progress');
+  if (node) node.textContent = total ? `${done} of ${total}` : 'nothing on it yet';
 }
 
 /* --- the bar of actions --------------------------------------------------- */

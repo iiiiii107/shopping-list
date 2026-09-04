@@ -166,6 +166,60 @@ describe('the things you actually do to a list', () => {
     expect(handlerErrors).toEqual([]);
   });
 
+  /* The bug this replaces: after the first Enter the whole view was rebuilt,
+     the input being typed into was replaced, focus went to the body, and the
+     second and third items were silently swallowed. Found by typing a real
+     list into a real browser, not by any assertion. */
+  it('a whole list can be typed in one go without losing focus', async () => {
+    const { store, list } = await seed();
+    const { renderSheet } = await import('./sheet.js');
+    renderSheet(host, list.id);
+
+    const input = host.querySelector('.item-new input');
+    input.dispatchEvent(new window.FocusEvent('focus'));
+
+    /* The flag is the mechanism, so the flag is what gets asserted. Checking
+       that the input is still in the document would pass either way here —
+       nothing in this test rebuilds the view, because main.js is what does
+       that in the real app. A test that passes for the wrong reason is worse
+       than no test. */
+    expect(document.body.dataset.editing, 'the add line must hold off the re-render').toBeTruthy();
+
+    for (const line of ['bread', 'butter', '2 lemons']) {
+      input.value = line;
+      input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await Promise.resolve();
+      expect(host.contains(input)).toBe(true);
+    }
+
+    input.dispatchEvent(new window.FocusEvent('blur'));
+    expect(document.body.dataset.editing).toBeUndefined();
+
+    const texts = store.listById(list.id).items.map((i) => i.text);
+    expect(texts).toEqual(expect.arrayContaining(['bread', 'butter', 'lemons']));
+    // And the rows appeared without waiting for a re-render.
+    expect(host.querySelectorAll('.item').length).toBe(6);
+    expect(handlerErrors).toEqual([]);
+  });
+
+  it('the running tally keeps up while the re-render is held off', async () => {
+    const { list } = await seed();
+    const { renderSheet } = await import('./sheet.js');
+    const { renderTable } = await import('./table.js');
+    renderTable(host);          // the bar lives outside the sheet, so render both
+    document.body.append(host);
+    host.replaceChildren();
+    renderSheet(host, list.id);
+
+    const input = host.querySelector('.item-new input');
+    input.dispatchEvent(new window.FocusEvent('focus'));
+    input.value = 'olives';
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await Promise.resolve();
+
+    expect(document.querySelector('.sheet-bar .progress').textContent).toBe('1 of 4');
+  });
+
   it('the tick crosses an item off and records who did it', async () => {
     const { store, list } = await seed();
     store.state.settings.profile = { name: 'Isabel', email: 'isabel@example.com' };

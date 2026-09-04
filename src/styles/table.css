@@ -224,13 +224,18 @@
   left: 0;
   bottom: clamp(18px, 5vh, 54px);
   z-index: 30;
+  --book-w: 118px;
   display: flex;
   align-items: center;
-  gap: 12px;
   padding: 0;
   text-decoration: none;
-  /* Most of the book is past the left edge; hovering slides it out. */
-  transform: translateX(-58%);
+  /* Most of the book is past the left edge; hovering slides it out.
+
+     The offset is in pixels against the book's own width, NOT a percentage of
+     the link: the label beside it is wider than the book, so a percentage
+     pushed the whole thing off-screen and left nothing to hover. The label is
+     taken out of the flow below for the same reason. */
+  transform: translateX(calc(var(--book-w) * -0.62));
   transition: transform .28s cubic-bezier(.2, .7, .3, 1);
 }
 
@@ -240,8 +245,8 @@
 }
 
 .cookbook-door .book {
-  width: 118px;
-  height: 152px;
+  width: var(--book-w);
+  height: calc(var(--book-w) * 1.29);
   flex: none;
   border-radius: 2px 5px 5px 2px;
   background: var(--accent);
@@ -275,6 +280,8 @@
 }
 
 .cookbook-door .plate {
+  position: absolute;
+  left: calc(100% + 12px);
   font-family: var(--font-display);
   font-size: calc(13.5px * var(--text-scale));
   color: var(--on-table);
@@ -298,7 +305,11 @@
    It shrinks and stays tucked in rather than being taken away — it is the
    only way back to the recipes. */
 @media (max-width: 620px) {
-  .cookbook-door { bottom: 12px; }
-  .cookbook-door .book { width: 76px; height: 98px; }
+  .cookbook-door { bottom: 12px; --book-w: 76px; }
   .sheets { padding-bottom: 120px; }
+
+  /* On a phone the bar along the foot of a list reaches the left edge, and
+     the book sat on top of the back button. The door belongs to the table
+     anyway — inside a list you go back to the table first. */
+  body:not([data-view='table']) .cookbook-door { display: none; }
 }

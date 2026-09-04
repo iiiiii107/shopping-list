@@ -16,6 +16,9 @@
 
 .sheet {
   position: relative;
+  /* flex:none, or the column flex parent shrinks the paper below its own
+     content and the last few items spill off the bottom edge onto the wood. */
+  flex: none;
   width: min(680px, 100%);
   min-height: min(880px, 78vh);
   padding: clamp(26px, 4vw, 48px) clamp(22px, 4vw, 46px) 64px;
@@ -161,8 +164,18 @@
 .item-tick svg { opacity: 0; transition: opacity .12s ease; }
 .item.is-done .item-tick svg { opacity: 1; }
 
+/* Shrink-wraps the words so the strike over it is exactly as long as they
+   are. min-width keeps an emptied item clickable rather than collapsing to
+   nothing you can put the caret back into. */
+.item-hold {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 6ch;
+  max-width: 100%;
+}
+
 .item-text {
-  flex: 1;
+  display: block;
   outline: none;
   overflow-wrap: anywhere;
   padding: 1px 2px;
@@ -173,11 +186,14 @@
    got, and untick a mistake — which is the point of leaving it in place. */
 .item.is-done .item-text { color: var(--muted); }
 
+/* width:100%, not left:0 + right:0. An <svg> is a replaced element, so with
+   width:auto it takes its intrinsic size and ignores `right` outright — which
+   is why the stroke first ran on across the empty half of the page. */
 .item .strike {
   position: absolute;
-  left: 34px;
-  right: 6px;
+  left: 0;
   top: 50%;
+  width: 100%;
   height: 12px;
   transform: translateY(-50%);
   pointer-events: none;
@@ -194,6 +210,7 @@
 /* Who crossed it off, when more than one of you is shopping. */
 .item .by {
   flex: none;
+  margin-left: auto;
   font-size: calc(10.5px * var(--text-scale));
   color: var(--muted);
   align-self: center;
@@ -224,7 +241,11 @@
   border: 1px dashed var(--hair-strong);
   border-radius: 4px;
 }
-.item-new input {
+/* Scoped to .sheet on purpose. app.css gives every text input a box, and
+   that rule is loaded after this file — at equal specificity it would win,
+   and the line you type the next item into would look like a form field
+   rather than the next line on a piece of paper. */
+.sheet .item-new input {
   flex: 1;
   border: none;
   border-bottom: 1px solid var(--hair);
@@ -232,7 +253,7 @@
   padding: 3px 2px;
   background: none;
 }
-.item-new input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+.sheet .item-new input:focus-visible { outline: none; border-bottom-color: var(--accent); }
 
 /* --- the bar of actions --------------------------------------------------- */
 
