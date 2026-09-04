@@ -479,12 +479,15 @@ body[data-mode='shopping'] .meta-read {
 .sheet-bar .spacer { flex: 1; }
 .sheet-bar .btn { white-space: nowrap; }
 
-.bar-wide { display: flex; gap: 8px; align-items: center; }
-.bar-narrow { display: none; }
+/* Scoped to .sheet-bar so these beat .btn-icon's own `display`. app.css is
+   loaded after this file, so at equal specificity it wins — which is how the
+   phone-only More button first turned up on a 1280px screen as well. */
+.sheet-bar .bar-wide { display: flex; gap: 8px; align-items: center; }
+.sheet-bar .bar-narrow { display: none; }
 
 @media (max-width: 620px) {
-  .bar-wide { display: none; }
-  .bar-narrow { display: inline-grid; }
+  .sheet-bar .bar-wide { display: none; }
+  .sheet-bar .bar-narrow { display: inline-grid; }
 }
 
 .more-actions { display: grid; gap: 8px; }

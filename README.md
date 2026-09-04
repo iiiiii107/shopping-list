@@ -29,6 +29,11 @@ Nothing has to be configured. Lists live in the browser until you sign in.
   into 250 ml. Also lifted, also worth keeping diffable.
 - `src/lib/storage.js` — one facade, one backend at a time: this browser when
   signed out, Firestore when signed in.
+- `src/lib/md.js` — lists out as markdown and back in. Out is easy; in is
+  deliberately forgiving, because a list arrives from a friend's notes app as
+  often as from this one.
+- `src/lib/pages.js` — a long list laid onto A4 sheets by CSS columns, so the
+  browser decides the breaks and no node ever moves.
 - `src/views/` — one file per screen.
 
 ## Tests

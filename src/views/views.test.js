@@ -163,6 +163,90 @@ describe('every screen renders and every button survives a click', () => {
   });
 });
 
+describe('sending a list and bringing one in', () => {
+  it('the table can turn a pasted list into a new sheet', async () => {
+    const { store } = await seed();
+    const before = store.state.lists.length;
+
+    const { renderTable } = await import('./table.js');
+    renderTable(host);
+    host.querySelector('[aria-label="Bring in a list"]').click();
+    await Promise.resolve();
+
+    const paste = document.querySelector('.md-paste');
+    expect(paste).toBeTruthy();
+    paste.value = '# From Anna\n\n## Freezer\n- [ ] peas\n- [ ] 2 kg fish fingers';
+
+    [...document.querySelectorAll('.modal-actions button')]
+      .find((b) => b.textContent === 'Make the sheet').click();
+    await Promise.resolve();
+
+    expect(store.state.lists.length).toBe(before + 1);
+    const made = store.state.lists[store.state.lists.length - 1];
+    expect(made.title).toBe('From Anna');
+    expect(made.sections.map((x) => x.label)).toEqual(['Freezer']);
+    expect(made.items.map((i) => i.text)).toEqual(['peas', 'fish fingers']);
+    expect(handlerErrors).toEqual([]);
+  });
+
+  it('an open list can have another added to it', async () => {
+    const { store, list } = await seed();
+    const before = store.listById(list.id).items.length;
+
+    const { renderSheet } = await import('./sheet.js');
+    renderSheet(host, list.id);
+    host.querySelector('[aria-label="Add a list to this one"]').click();
+    await Promise.resolve();
+
+    document.querySelector('.md-paste').value = '## Freezer\n- [ ] peas';
+    [...document.querySelectorAll('.modal-actions button')]
+      .find((b) => b.textContent === 'Add it').click();
+    await Promise.resolve();
+
+    const after = store.listById(list.id);
+    expect(after.items.length).toBe(before + 1);
+    expect(after.sections.map((x) => x.label)).toContain('Freezer');
+    expect(handlerErrors).toEqual([]);
+  });
+
+  /* An empty file is the one thing an importer must refuse. The cook book's
+     made a recipe out of every one it was handed. */
+  it('refuses a page with nothing on it, and says so', async () => {
+    const { store } = await seed();
+    const before = store.state.lists.length;
+
+    const { renderTable } = await import('./table.js');
+    renderTable(host);
+    host.querySelector('[aria-label="Bring in a list"]').click();
+    await Promise.resolve();
+
+    document.querySelector('.md-paste').value = '# Just a title\n\n---\n';
+    [...document.querySelectorAll('.modal-actions button')]
+      .find((b) => b.textContent === 'Make the sheet').click();
+    await Promise.resolve();
+
+    expect(store.state.lists.length).toBe(before);
+    expect(document.querySelector('.import-form .note').textContent).toMatch(/nothing on that page/i);
+    // And the dialog stays open, so the paste is not lost.
+    expect(document.querySelector('.md-paste')).toBeTruthy();
+  });
+
+  it('sending a list shows the words it will travel as', async () => {
+    const { list } = await seed();
+    const { renderSheet } = await import('./sheet.js');
+    renderSheet(host, list.id);
+
+    host.querySelector('[aria-label="Send this list"]').click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const preview = document.querySelector('.md-preview');
+    expect(preview).toBeTruthy();
+    expect(preview.value).toContain('# Weekly shop');
+    expect(preview.value).toContain('- [ ] 250 ml milk');
+    expect(handlerErrors).toEqual([]);
+  });
+});
+
 describe('shopping mode', () => {
   /* The decision behind this: shopping mode locks editing, it does not unlock
      ticking. Crossing off is the single most common thing anyone does here,

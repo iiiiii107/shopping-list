@@ -6,6 +6,7 @@ import { store } from '../lib/store.js';
 import { readingOrder, progressOf, itemToText, retextItem } from '../lib/list.js';
 import { layout, keepLaidOut } from '../lib/pages.js';
 import { keepAwake } from '../lib/awake.js';
+import { importDialog, shareList, sendSection } from './transfer.js';
 import { PAPER_STOCKS, PALETTE_KEYS, applySheetPalette } from '../lib/theme.js';
 import { paletteEditor } from './palette.js';
 
@@ -174,6 +175,11 @@ function sectionHead(list, section, shopping) {
       onSave: (text) => store.updateSection(list.id, section.id, { label: text || 'Heading' }),
     }),
     !shopping && el('button', {
+      class: 'btn btn-quiet btn-sm', type: 'button', text: 'send',
+      title: `Send just what is under “${section.label}”`,
+      onClick: () => sendSection(list, section.id, section.label),
+    }),
+    !shopping && el('button', {
       class: 'btn btn-quiet btn-sm', type: 'button', text: 'remove',
       title: 'Remove this heading — what is under it stays',
       onClick: () => store.removeSection(list.id, section.id),
@@ -335,11 +341,8 @@ function sheetActions(list, done) {
       run: () => store.clearDone(list.id),
     },
     { icon: 'brush', label: 'How this sheet looks', run: () => paperDialog(list) },
-    {
-      icon: 'share',
-      label: 'Share this list',
-      run: () => toast('Sharing arrives in the next piece of work.'),
-    },
+    { icon: 'share', label: 'Send this list', run: () => shareList(list) },
+    { icon: 'inbox', label: 'Add a list to this one', run: () => importDialog(list) },
     { icon: 'trash', label: 'Throw this list away', run: () => confirmDelete(list) },
   ].filter(Boolean);
 }

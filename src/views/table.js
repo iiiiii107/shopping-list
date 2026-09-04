@@ -2,6 +2,7 @@ import { el, add, icon, iconButton, iconLink, modal, hashUnit, chefName, toast }
 import { store } from '../lib/store.js';
 import { sortLists, progressOf, readingOrder, itemToText } from '../lib/list.js';
 import { PAPER_STOCKS } from '../lib/theme.js';
+import { importDialog } from './transfer.js';
 
 /* The table: every list you have, lying about as sheets of paper.
 
@@ -123,8 +124,8 @@ export function newListDialog(onDone) {
 }
 
 /* Importing is deliberately reachable from here as well as from inside a
-   list: a whole list arriving becomes a new sheet, where a section arriving
-   has to land inside one that already exists. Phase 2 fills this in. */
+   list, because the two mean different things: from the table a file becomes
+   a new sheet, from inside a list it is added to the one already open. */
 function importList() {
-  toast('Bringing lists in arrives with the next piece of work.');
+  importDialog();
 }
