@@ -74,8 +74,20 @@ export const PAPER_STOCKS = [
 ];
 
 /**
- * Push the whole of settings onto the document. Called at boot and after any
- * settings change; it is idempotent, so calling it twice costs nothing.
+ * Which set of colours is in force right now — 'light' or 'dark'.
+ *
+ * With the theme set to "System" the OS decides, and it can change under us
+ * mid-session, so this is read at the moment it is needed rather than stored.
+ */
+export function currentMode(settings = {}) {
+  if (settings.theme === 'light' || settings.theme === 'dark') return settings.theme;
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+/**
+ * Push the whole of settings onto the document. Called at boot, after any
+ * settings change, and whenever the OS flips light to dark; it is idempotent,
+ * so calling it twice costs nothing.
  */
 export function applyTheme(settings = {}) {
   const root = document.documentElement;
@@ -89,10 +101,14 @@ export function applyTheme(settings = {}) {
 
   root.dataset.wood = settings.wood || 'oak';
 
-  // Palette overrides. Clearing a key has to remove the property outright,
-  // or the last colour chosen would stick around forever.
+  /* Only the set for the theme in force is written. An inline property on
+     <html> beats both token blocks in tokens.css, so writing both sets would
+     be writing one colour twice and the other never. Clearing a key has to
+     remove the property outright, or the last colour chosen would stick
+     around forever. */
+  const chosen = settings.palette?.[currentMode(settings)] || {};
   for (const { id } of ALL_KEYS) {
-    const value = settings.palette?.[id];
+    const value = chosen[id];
     if (value) root.style.setProperty(`--${id}`, value);
     else root.style.removeProperty(`--${id}`);
   }
@@ -105,11 +121,13 @@ export function applyTheme(settings = {}) {
 /**
  * A list's own colours, applied to the sheet element rather than the document.
  * A per-sheet palette is a small override on top of the global one, so a list
- * left alone simply follows whatever you chose in settings.
+ * left alone simply follows whatever you chose in settings — and, like the
+ * global one, it has a set for each theme.
  */
-export function applySheetPalette(node, palette = {}) {
+export function applySheetPalette(node, palette = {}, settings = {}) {
+  const chosen = palette?.[currentMode(settings)] || {};
   for (const { id } of PALETTE_KEYS) {
-    const value = palette?.[id];
+    const value = chosen[id];
     if (value) node.style.setProperty(`--${id}`, value);
     else node.style.removeProperty(`--${id}`);
   }

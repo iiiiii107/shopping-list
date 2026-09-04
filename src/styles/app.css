@@ -306,3 +306,18 @@ button:focus-visible,
 .section-add { margin-top: 10px; }
 
 .sheet-body { min-height: 40px; }
+
+/* --- the light/dark colour pair -------------------------------------------- */
+/* Two sets of every colour, one switch saying which you are editing. Showing
+   all eight pickers at once was the alternative and it read as a control
+   panel; this way you change a colour while you can actually see it. */
+
+.palette-editor { margin-top: 10px; }
+
+.palette-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.palette-head .label { margin: 0; }

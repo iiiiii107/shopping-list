@@ -4,7 +4,10 @@ import {
 } from '../lib/dom.js';
 import { store } from '../lib/store.js';
 import { readingOrder, progressOf, itemToText, retextItem } from '../lib/list.js';
-import { PAPER_STOCKS, PALETTE_KEYS, applySheetPalette, toHex } from '../lib/theme.js';
+import { layout, keepLaidOut } from '../lib/pages.js';
+import { keepAwake } from '../lib/awake.js';
+import { PAPER_STOCKS, PALETTE_KEYS, applySheetPalette } from '../lib/theme.js';
+import { paletteEditor } from './palette.js';
 
 /* One list, as a single sheet of paper.
 
@@ -20,7 +23,7 @@ import { PAPER_STOCKS, PALETTE_KEYS, applySheetPalette, toHex } from '../lib/the
    caret goes with it, mid-word. So a focused field claims the `editing` flag
    on <body>, which main.js's maybeGo() respects, and releases it on blur. */
 
-export function renderSheet(scene, listId) {
+export function renderSheet(scene, listId, query = new URLSearchParams()) {
   const list = store.listById(listId);
   if (!list) {
     add(scene, el('div', { class: 'table-empty' }, [
@@ -30,42 +33,83 @@ export function renderSheet(scene, listId) {
     return;
   }
 
-  const view = el('div', { class: 'sheet-view' });
-  const sheet = el('div', { class: 'sheet', dataset: { paper: list.paper || 'plain' } });
-  applySheetPalette(sheet, list.palette);
+  const shopping = query.get('shop') === '1';
+  document.body.dataset.mode = shopping ? 'shopping' : 'writing';
 
-  add(sheet, header(list), body(list));
+  const view = el('div', { class: 'sheet-view' });
+  const sheet = el('div', {
+    class: 'sheet paper-stock',
+    dataset: { paper: list.paper || 'plain' },
+  });
+  applySheetPalette(sheet, list.palette, store.state.settings);
+
+  /* The pages are drawn underneath and the content flows over them. Both are
+     the sheet's own children so the whole thing keeps one paper colour, one
+     stock and one palette however many pages it turns out to be. */
+  const pages = el('div', { class: 'sheet-pages', 'aria-hidden': 'true' });
+  const flow = el('div', { class: 'sheet-flow' }, [header(list, shopping), body(list, shopping)]);
+
+  add(sheet, pages, flow);
   add(view, sheet);
-  add(scene, view, bar(list));
+  add(scene, view, bar(list, shopping));
+
+  relayout(sheet, list);
+  const stopLayout = keepLaidOut(sheet, { title: list.title });
+  const stopAwake = shopping ? keepAwake() : null;
+
+  /* Both hold something outside this view — a resize listener and, in a shop,
+     the screen itself. claimBodyFlag's observer is what tells us the view has
+     gone, including when it is replaced by a re-render rather than removed. */
+  const releaseView = claimBodyFlag('sheet', sheet);
+  const watch = new MutationObserver(() => {
+    if (document.contains(sheet)) return;
+    stopLayout();
+    stopAwake?.();
+    releaseView();
+    watch.disconnect();
+  });
+  watch.observe(document.body, { childList: true, subtree: true });
+}
+
+/* Re-flowing is a style change, never a move, so this is safe to call in the
+   middle of typing — which is exactly when it is needed, as a page fills. */
+function relayout(sheet, list) {
+  layout(sheet, { title: list.title });
 }
 
 /* --- the header ----------------------------------------------------------- */
 
-function header(list) {
+function header(list, shopping) {
   return el('header', { class: 'sheet-head' }, [
     editable('h1', {
       class: 'sheet-title',
       value: list.title,
       placeholder: 'Untitled list',
+      locked: shopping,
       onSave: (text) => store.updateList(list.id, { title: text || 'Untitled list' }),
     }),
-    editable('div', {
+    (list.subtitle || !shopping) && editable('div', {
       class: 'sheet-sub',
       value: list.subtitle,
       placeholder: 'A subtitle, if it needs one',
+      locked: shopping,
       onSave: (text) => store.updateList(list.id, { subtitle: text }),
     }),
     el('div', { class: 'sheet-meta' }, [
-      el('span', {}, [
-        el('span', { class: 'label', text: 'Date' }),
-        el('input', {
-          type: 'date',
-          value: list.date || '',
-          'aria-label': 'The date this list is for',
-          onChange: (e) => store.updateList(list.id, { date: e.target.value }),
-        }),
-      ]),
-      el('span', {}, [
+      // With your hands full these are read, not typed.
+      shopping
+        ? (list.date || list.store) && el('span', { class: 'meta-read',
+            text: [list.date, list.store].filter(Boolean).join(' · ') })
+        : el('span', {}, [
+            el('span', { class: 'label', text: 'Date' }),
+            el('input', {
+              type: 'date',
+              value: list.date || '',
+              'aria-label': 'The date this list is for',
+              onChange: (e) => store.updateList(list.id, { date: e.target.value }),
+            }),
+          ]),
+      !shopping && el('span', {}, [
         el('span', { class: 'label', text: 'Shop' }),
         el('input', {
           type: 'text',
@@ -82,7 +126,7 @@ function header(list) {
 
 /* --- sections and items --------------------------------------------------- */
 
-function body(list) {
+function body(list, shopping) {
   const wrap = el('div', { class: 'sheet-body' });
 
   for (const { section, items } of readingOrder(list)) {
@@ -92,12 +136,14 @@ function body(list) {
     if (!section && !items.length && list.sections.length) continue;
 
     const group = el('section', { class: 'sheet-section' });
-    if (section) add(group, sectionHead(list, section));
+    if (section) add(group, sectionHead(list, section, shopping));
 
-    const ul = el('ul', { class: 'items' }, items.map((item) => itemRow(list, item)));
+    const ul = el('ul', { class: 'items' }, items.map((item) => itemRow(list, item, shopping)));
     add(group, ul, newItemLine(list, section?.id || '', ul));
     add(wrap, group);
   }
+
+  if (shopping) return wrap;
 
   add(wrap, el('div', { class: 'section-add' }, [
     el('button', {
@@ -118,15 +164,16 @@ function body(list) {
   return wrap;
 }
 
-function sectionHead(list, section) {
+function sectionHead(list, section, shopping) {
   return el('div', { class: 'section-head', dataset: { section: section.id } }, [
     editable('h2', {
       class: 'section-label',
       value: section.label,
       placeholder: 'Heading',
+      locked: shopping,
       onSave: (text) => store.updateSection(list.id, section.id, { label: text || 'Heading' }),
     }),
-    el('button', {
+    !shopping && el('button', {
       class: 'btn btn-quiet btn-sm', type: 'button', text: 'remove',
       title: 'Remove this heading — what is under it stays',
       onClick: () => store.removeSection(list.id, section.id),
@@ -134,7 +181,7 @@ function sectionHead(list, section) {
   ]);
 }
 
-function itemRow(list, item) {
+function itemRow(list, item, shopping) {
   const row = el('li', {
     class: `item${item.done ? ' is-done' : ''}`,
     dataset: { item: item.id },
@@ -152,6 +199,7 @@ function itemRow(list, item) {
     class: 'item-text',
     value: itemToText(item),
     placeholder: 'Something to buy',
+    locked: shopping,
     onSave: (typed) => {
       // An item emptied is an item deleted. Backspacing a line away is how
       // people remove things from a written list, and it would be strange to
@@ -213,10 +261,14 @@ function newItemLine(list, sectionId, ul) {
 
     const item = store.addItem(list.id, text, sectionId);
     input.value = '';
-    if (item) {
-      ul.append(itemRow(list, item));
-      countUp(list);
-    }
+    if (!item) return;
+
+    ul.append(itemRow(list, item));
+    countUp(list);
+    // A new item may have filled the page. Re-flowing only changes styles, so
+    // the caret stays in this very input while a second sheet appears beside it.
+    const sheet = input.closest('.sheet');
+    if (sheet) layout(sheet, { title: list.title });
   });
 
   return el('div', { class: 'item-new', dataset: { add: sectionId || 'loose' } }, [input]);
@@ -232,21 +284,75 @@ function countUp(list) {
 
 /* --- the bar of actions --------------------------------------------------- */
 
-function bar(list) {
+function bar(list, shopping) {
   const { done, total } = progressOf(list);
+  const left = total - done;
 
-  return el('div', { class: 'sheet-bar' }, [
+  /* In a shop the bar is what you look at, so it says the thing you actually
+     want to know — how many are still to find — rather than a ratio. */
+  const progress = shopping
+    ? (left ? `${left} still to find` : 'that is everything')
+    : (total ? `${done} of ${total}` : 'nothing on it yet');
+
+  return el('div', { class: `sheet-bar${shopping ? ' is-shopping' : ''}` }, [
     iconLink('chevronLeft', 'Back to the table', '#/'),
-    el('span', { class: 'progress', text: total ? `${done} of ${total}` : 'nothing on it yet' }),
+    el('span', { class: 'progress', text: progress }),
     el('span', { class: 'spacer' }),
-    done > 0 && el('button', {
-      class: 'btn btn-secondary btn-sm', type: 'button', text: 'Clear crossed off',
-      onClick: () => store.clearDone(list.id),
-    }),
-    iconButton('brush', 'How this sheet looks', { onClick: () => paperDialog(list) }),
-    iconButton('share', 'Share this list', { onClick: () => toast('Sharing arrives in the next piece of work.') }),
-    iconButton('trash', 'Throw this list away', { onClick: () => confirmDelete(list) }),
+
+    shopping
+      ? el('button', {
+          class: 'btn btn-secondary', type: 'button', text: 'Done shopping',
+          onClick: () => { location.hash = `#/list/${list.id}`; },
+        })
+      : el('button', {
+          class: 'btn', type: 'button', text: 'Shopping mode',
+          title: 'Big targets, the screen stays awake, and nothing can be edited by accident',
+          onClick: () => { location.hash = `#/list/${list.id}?shop=1`; },
+        }),
+
+    /* The rest are things you do while making a list, not while holding one.
+       On a wide screen they sit in the bar; on a phone they fold into a single
+       button, because otherwise the bar wraps to two rows and half the screen
+       becomes chrome. Same handlers either way. */
+    ...(shopping ? [] : [
+      el('span', { class: 'bar-wide' }, sheetActions(list, done).map(({ icon: name, label, run, text }) =>
+        (text
+          ? el('button', { class: 'btn btn-secondary btn-sm', type: 'button', text: label, onClick: run })
+          : iconButton(name, label, { onClick: run })))),
+      iconButton('sliders', 'More', {
+        class: 'btn-icon bar-narrow',
+        onClick: () => moreDialog(list, done),
+      }),
+    ]),
   ]);
+}
+
+/** The list-making actions, in one place, so the bar and the phone menu agree. */
+function sheetActions(list, done) {
+  return [
+    done > 0 && {
+      label: 'Clear crossed off', text: true,
+      run: () => store.clearDone(list.id),
+    },
+    { icon: 'brush', label: 'How this sheet looks', run: () => paperDialog(list) },
+    {
+      icon: 'share',
+      label: 'Share this list',
+      run: () => toast('Sharing arrives in the next piece of work.'),
+    },
+    { icon: 'trash', label: 'Throw this list away', run: () => confirmDelete(list) },
+  ].filter(Boolean);
+}
+
+function moreDialog(list, done) {
+  const body = el('div', { class: 'more-actions' },
+    sheetActions(list, done).map(({ label, run }) => el('button', {
+      class: 'btn btn-secondary', type: 'button', text: label,
+      onClick: () => { closeIt(); run(); },
+    })));
+
+  const { close } = modal({ title: list.title, body, actions: [{ label: 'Close' }] });
+  function closeIt() { close(); }
 }
 
 function confirmDelete(list) {
@@ -281,29 +387,11 @@ function paperDialog(list) {
     el('label', { class: 'label', text: 'Paper' }), stock,
   ]));
 
-  for (const key of PALETTE_KEYS) {
-    const input = el('input', {
-      type: 'color',
-      value: toHex(list.palette?.[key.id] || `var(--${key.id})`),
-      'aria-label': key.label,
-    });
-    input.addEventListener('input', () => {
-      store.updateList(list.id, { palette: { ...list.palette, [key.id]: input.value } });
-    });
-
-    add(body, el('div', { class: 'field swatch' }, [
-      el('label', { class: 'label', text: `${key.label} — ${key.hint}` }),
-      input,
-      el('button', {
-        class: 'btn btn-quiet btn-sm', type: 'button', text: 'default',
-        onClick: () => {
-          const next = { ...list.palette };
-          delete next[key.id];
-          store.updateList(list.id, { palette: next });
-        },
-      }),
-    ]));
-  }
+  add(body, paletteEditor({
+    keys: PALETTE_KEYS,
+    palette: () => store.listById(list.id)?.palette,
+    onChange: (palette) => store.updateList(list.id, { palette }),
+  }));
 
   modal({ title: 'This sheet', body, actions: [{ label: 'Done', class: 'btn' }] });
 }
@@ -323,15 +411,20 @@ function paperDialog(list) {
  * - Saving on blur and on Enter, never on every keystroke. Saving as you type
  *   means re-rendering as you type, and that is the same lost caret again.
  */
-function editable(tag, { class: cls, value, placeholder, onSave }) {
+function editable(tag, { class: cls, value, placeholder, onSave, locked = false }) {
   const node = el(tag, {
     class: cls,
-    contenteditable: 'plaintext-only',
-    role: 'textbox',
+    // Locked in a shop. Not disabled-looking, just not editable — the text
+    // reads exactly the same, it simply cannot be changed by a thumb that
+    // was aiming for the box beside it.
+    contenteditable: locked ? null : 'plaintext-only',
+    role: locked ? null : 'textbox',
     'data-placeholder': placeholder,
-    'aria-label': placeholder,
+    'aria-label': locked ? null : placeholder,
     text: value || '',
   });
+
+  if (locked) return node;
 
   let release = null;
 

@@ -1,9 +1,10 @@
 import { el, add, iconLink, toast } from '../lib/dom.js';
 import { store } from '../lib/store.js';
 import {
-  applyTheme, toHex, PALETTE_KEYS, TAG_KEYS, PRESETS, WOODS, FACES, FACE_LABELS,
+  applyTheme, PALETTE_KEYS, TAG_KEYS, PRESETS, WOODS, FACES, FACE_LABELS, currentMode,
 } from '../lib/theme.js';
 import { storage } from '../lib/storage.js';
+import { paletteEditor } from './palette.js';
 
 /* Settings.
 
@@ -54,11 +55,20 @@ export function renderSettings(scene) {
         field('Ready-made', segmented(
           Object.entries(PRESETS).map(([id, p]) => [id, p.label]),
           currentPreset(settings),
-          (value) => save({ palette: { ...PRESETS[value].vars } }),
-        ), 'A starting point. Anything below can still be changed on its own.'),
-        ...PALETTE_KEYS.map((key) => swatch(key, settings)),
+          (value) => applyPreset(value),
+        ), 'A starting point for the theme you are in. Anything below can still be changed on its own.'),
+        paletteEditor({
+          keys: PALETTE_KEYS,
+          palette: () => store.state.settings.palette,
+          onChange: (palette) => save({ palette }),
+        }),
         el('p', { class: 'note', text: 'Sheet colours — how one list is told from another on the table.' }),
-        el('div', { class: 'tag-row' }, TAG_KEYS.map((key) => swatchSmall(key, settings))),
+        paletteEditor({
+          keys: TAG_KEYS,
+          palette: () => store.state.settings.palette,
+          onChange: (palette) => save({ palette }),
+          small: true,
+        }),
       ]),
 
       section('Type', [
@@ -133,56 +143,31 @@ function segmented(options, current, onPick) {
     })));
 }
 
-/* Which preset the current palette matches, if any. Without this the preset
-   row would show nothing selected the moment you changed one colour by hand,
-   and you could not find your way back to a named starting point. */
+/* A preset lands on the set for the theme you are in, and leaves the other
+   alone. The named palettes are all daylight colours; dropping them onto the
+   dark set as well would turn the lights on. */
+function applyPreset(id) {
+  const settings = store.state.settings;
+  const mode = currentMode(settings);
+  const palette = {
+    light: { ...(settings.palette?.light || {}) },
+    dark: { ...(settings.palette?.dark || {}) },
+  };
+  palette[mode] = { ...PRESETS[id].vars };
+  return save({ palette });
+}
+
+/* Which preset the current set matches, if any. Without this the preset row
+   would show nothing selected the moment you changed one colour by hand, and
+   you could not find your way back to a named starting point. */
 function currentPreset(settings) {
-  const palette = settings.palette || {};
+  const palette = settings.palette?.[currentMode(settings)] || {};
   for (const [id, preset] of Object.entries(PRESETS)) {
     const keys = Object.keys(preset.vars);
     if (!keys.length && !Object.keys(palette).length) return id;
     if (keys.length && keys.every((k) => palette[k] === preset.vars[k])) return id;
   }
   return '';
-}
-
-function swatch(key, settings) {
-  const input = el('input', {
-    type: 'color',
-    value: toHex(settings.palette?.[key.id] || `var(--${key.id})`),
-    'aria-label': key.label,
-  });
-  input.addEventListener('input', () => {
-    save({ palette: { ...store.state.settings.palette, [key.id]: input.value } });
-  });
-
-  return el('div', { class: 'field swatch' }, [
-    el('label', { class: 'label', text: `${key.label} — ${key.hint}` }),
-    input,
-    el('button', {
-      class: 'btn btn-quiet btn-sm', type: 'button', text: 'default',
-      onClick: () => {
-        const next = { ...store.state.settings.palette };
-        delete next[key.id];
-        save({ palette: next });
-        input.value = toHex(`var(--${key.id})`);
-      },
-    }),
-  ]);
-}
-
-function swatchSmall(key, settings) {
-  const input = el('input', {
-    type: 'color',
-    class: 'swatch-sm',
-    value: toHex(settings.palette?.[key.id] || `var(--${key.id})`),
-    'aria-label': key.label,
-    title: key.label,
-  });
-  input.addEventListener('input', () => {
-    save({ palette: { ...store.state.settings.palette, [key.id]: input.value } });
-  });
-  return input;
 }
 
 /* --- backup --------------------------------------------------------------- */

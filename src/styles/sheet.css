@@ -21,16 +21,25 @@
   flex: none;
   width: min(680px, 100%);
   min-height: min(880px, 78vh);
-  padding: clamp(26px, 4vw, 48px) clamp(22px, 4vw, 46px) 64px;
-  background: var(--paper);
   color: var(--ink);
+}
+
+/* Paper — the look of it, wherever it currently lives. On a phone that is the
+   sheet itself, growing as long as the list. On a wide screen the sheet is a
+   frame and each drawn page wears this instead. */
+.paper-stock {
+  background-color: var(--paper);
   border: 1px solid var(--paper-edge);
   border-radius: 2px;
   box-shadow: 0 16px 42px -22px var(--shadow-2), 0 1px 3px var(--shadow-1);
 }
 
-/* The tooth of the paper, over whatever stock is beneath it. */
-.sheet::after {
+.sheet:not(.is-paged) {
+  padding: clamp(26px, 4vw, 48px) clamp(22px, 4vw, 46px) 64px;
+}
+
+/* The tooth of the paper. */
+.paper-stock::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -39,6 +48,66 @@
   background-size: 180px 180px;
   opacity: .05;
   mix-blend-mode: multiply;
+}
+
+/* --- pages ---------------------------------------------------------------- */
+/* On a wide screen a long list runs onto a second sheet beside the first,
+   rather than becoming one very tall one. The columns and the drawn pages are
+   kept in step by lib/pages.js; everything here is only their appearance. */
+
+.sheet.is-paged {
+  min-height: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+.sheet-pages {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.page {
+  position: absolute;
+  top: 0;
+}
+
+.page-head,
+.page-num {
+  position: absolute;
+  font-family: var(--font-display);
+  font-size: calc(11.5px * var(--text-scale));
+  color: var(--muted);
+  opacity: .7;
+}
+.page-head { top: 14px; left: 0; right: 0; text-align: center; }
+.page-num { bottom: 12px; left: 0; right: 0; text-align: center; }
+
+.sheet-flow { position: relative; }
+
+/* Nothing gets cut in half by a page break. A shopping list split mid-item —
+   the box on one page and the words on the next — would be unreadable. */
+.sheet-head,
+.section-head,
+.item,
+.item-new,
+.section-add { break-inside: avoid; }
+
+/* A heading at the very foot of a page, with its items over the fold, is the
+   classic bad break. */
+.section-head { break-after: avoid; }
+
+/* Sideways, when the list runs past what the screen can hold.
+
+   `align-items`, not `justify-content`: this is a column flex container, so
+   align-items is the horizontal axis. And `safe`, so that once the pages are
+   wider than the window they start at the left edge instead of being centred
+   into an overflow you cannot scroll back to. */
+.sheet-view:has(.sheet.is-paged) {
+  overflow-x: auto;
+  align-items: safe center;
 }
 
 /* --- the header ---------------------------------------------------------- */
@@ -354,3 +423,68 @@
 .sheet[data-paper='receipt'] .sheet-title,
 .sheet[data-paper='receipt'] .sheet-sub,
 .sheet[data-paper='receipt'] .section-label { font-family: inherit; font-style: normal; }
+
+/* --- shopping mode --------------------------------------------------------- */
+/* You are holding the phone in one hand with a trolley in the other. So the
+   targets grow, the words grow, and nothing can be edited by a thumb that was
+   aiming for the box beside it. Crossing off still works everywhere — it is
+   the single most common thing anyone does here, and putting it behind a mode
+   would put a step in front of it. */
+
+body[data-mode='shopping'] .item {
+  padding: 11px 2px;
+}
+
+body[data-mode='shopping'] .item-tick {
+  width: 34px;
+  height: 34px;
+  border-width: 1.5px;
+}
+body[data-mode='shopping'] .item-tick svg { width: 21px; height: 21px; }
+
+body[data-mode='shopping'] .item-text {
+  font-size: calc(16.5px * var(--text-scale));
+  /* Not editable here, so the caret would be a lie. */
+  cursor: default;
+  user-select: none;
+}
+
+body[data-mode='shopping'] .item.is-done .item-text { opacity: .55; }
+
+body[data-mode='shopping'] .section-label {
+  font-size: calc(20px * var(--text-scale));
+  cursor: default;
+  user-select: none;
+}
+
+body[data-mode='shopping'] .sheet-title { cursor: default; user-select: none; }
+
+body[data-mode='shopping'] .meta-read {
+  font-family: var(--font-display);
+  font-style: italic;
+}
+
+/* What is left to find, said plainly and large enough to read at arm's length
+   over the handle of a trolley. */
+.sheet-bar.is-shopping .progress {
+  font-size: calc(15px * var(--text-scale));
+  color: var(--on-table);
+}
+
+/* --- the bar, at two widths ------------------------------------------------ */
+/* Everything on one line, always. Wrapping turned the foot of a phone screen
+   into two rows of buttons over a list that had four things left on it. */
+
+.sheet-bar > * { flex: none; }
+.sheet-bar .spacer { flex: 1; }
+.sheet-bar .btn { white-space: nowrap; }
+
+.bar-wide { display: flex; gap: 8px; align-items: center; }
+.bar-narrow { display: none; }
+
+@media (max-width: 620px) {
+  .bar-wide { display: none; }
+  .bar-narrow { display: inline-grid; }
+}
+
+.more-actions { display: grid; gap: 8px; }

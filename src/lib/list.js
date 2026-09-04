@@ -37,7 +37,9 @@ export function newList({ title = 'Shopping list', id, createdAt, updatedAt, ...
     date: '',
     store: '',
     paper: 'plain',
-    palette: {},          // this sheet's own colours, over the global ones
+    // This sheet's own colours, over the global ones — a set for each theme,
+    // so a list can be cream by day and deep green at night.
+    palette: { light: {}, dark: {} },
     sections: [],         // { id, label, order }
     items: [],
     // Sharing is off until it is deliberately turned on. A list that has

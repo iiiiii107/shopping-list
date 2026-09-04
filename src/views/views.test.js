@@ -17,6 +17,10 @@ beforeAll(() => {
   window.matchMedia = () => ({
     matches: false, addEventListener() {}, removeEventListener() {},
   });
+  // jsdom lays nothing out, so the page maths all resolves to a single page.
+  // Width is what decides pages-or-strip, so it is set explicitly per test.
+  Object.defineProperty(window, 'innerWidth', { value: 1280, writable: true, configurable: true });
+  Object.defineProperty(window, 'innerHeight', { value: 800, writable: true, configurable: true });
   Element.prototype.scrollIntoView = () => {};
   window.confirm = () => false;
   window.alert = () => {};
@@ -128,6 +132,15 @@ describe('every screen renders and every button survives a click', () => {
     });
   }
 
+  it('shopping mode renders, and nothing on it is dead', async () => {
+    const { list } = await seed();
+    const { renderSheet } = await import('./sheet.js');
+
+    expect(() => renderSheet(host, list.id, new URLSearchParams('shop=1'))).not.toThrow();
+    expect(await clickEverything(host)).toBeGreaterThan(0);
+    expect(handlerErrors, 'a button in shopping mode threw').toEqual([]);
+  });
+
   it('a list that has been thrown away says so rather than crashing', async () => {
     await seed();
     const { renderSheet } = await import('./sheet.js');
@@ -147,6 +160,97 @@ describe('every screen renders and every button survives a click', () => {
     expect(host.textContent).toMatch(/empty table/i);
     expect(await clickEverything(host)).toBeGreaterThan(0);
     expect(handlerErrors).toEqual([]);
+  });
+});
+
+describe('shopping mode', () => {
+  /* The decision behind this: shopping mode locks editing, it does not unlock
+     ticking. Crossing off is the single most common thing anyone does here,
+     and it is often done at home while writing the list — "we already have
+     milk" — so putting it behind a mode would put a step in front of it. */
+  async function shop() {
+    const { store, list } = await seed();
+    const { renderSheet } = await import('./sheet.js');
+    renderSheet(host, list.id, new URLSearchParams('shop=1'));
+    return { store, list };
+  }
+
+  it('nothing on the page can be edited', async () => {
+    await shop();
+    const fields = [...host.querySelectorAll('.item-text, .section-label, .sheet-title')];
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.some((f) => f.getAttribute('contenteditable'))).toBe(false);
+  });
+
+  it('but crossing off still works, and still records who', async () => {
+    const { store, list } = await shop();
+    store.state.settings.profile = { name: 'Isabel', email: 'isabel@example.com' };
+
+    host.querySelector('.item:not(.is-done) .item-tick').click();
+    await Promise.resolve();
+
+    const crossed = store.listById(list.id).items.filter((i) => i.done);
+    expect(crossed.length).toBe(2);
+    expect(crossed.some((i) => i.doneBy === 'isabel@example.com')).toBe(true);
+  });
+
+  /* You remember the eggs in the shop. Adding is not editing. */
+  it('you can still add something you remembered', async () => {
+    const { store, list } = await shop();
+    const input = host.querySelector('.item-new input');
+    expect(input).toBeTruthy();
+
+    input.value = 'eggs';
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await Promise.resolve();
+
+    expect(store.listById(list.id).items.some((i) => i.text === 'eggs')).toBe(true);
+  });
+
+  it('headings cannot be added or removed with your hands full', async () => {
+    await shop();
+    expect(host.querySelector('.section-add')).toBeNull();
+    expect([...host.querySelectorAll('.section-head button')]).toHaveLength(0);
+  });
+
+  it('the bar says what is left to find, not a ratio', async () => {
+    await shop();
+    expect(document.querySelector('.sheet-bar .progress').textContent).toMatch(/still to find/);
+  });
+});
+
+describe('pages', () => {
+  it('a wide screen gets drawn pages, a narrow one gets one long strip', async () => {
+    const { list } = await seed();
+    const { renderSheet } = await import('./sheet.js');
+
+    window.innerWidth = 400;
+    renderSheet(host, list.id);
+    let sheet = host.querySelector('.sheet');
+    expect(sheet.classList.contains('is-paged')).toBe(false);
+    expect(sheet.classList.contains('paper-stock')).toBe(true);
+    expect(host.querySelectorAll('.page')).toHaveLength(0);
+
+    host.replaceChildren();
+    window.innerWidth = 1280;
+    renderSheet(host, list.id);
+    sheet = host.querySelector('.sheet');
+    expect(sheet.classList.contains('is-paged')).toBe(true);
+    // The paper is worn by each page now, not by the frame around them.
+    expect(sheet.classList.contains('paper-stock')).toBe(false);
+    expect(host.querySelectorAll('.page').length).toBeGreaterThan(0);
+  });
+
+  it('every page carries the list\'s paper stock', async () => {
+    const { store, list } = await seed();
+    await store.updateList(list.id, { paper: 'ruled' });
+    const { renderSheet } = await import('./sheet.js');
+
+    window.innerWidth = 1280;
+    renderSheet(host, list.id);
+    for (const page of host.querySelectorAll('.page')) {
+      expect(page.dataset.paper).toBe('ruled');
+    }
   });
 });
 

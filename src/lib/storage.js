@@ -22,7 +22,11 @@ export const DEFAULT_SETTINGS = {
   profile: { name: '', email: '' },
   theme: 'system',       // system | light | dark
   wood: 'oak',
-  palette: {},           // colour overrides, written onto <html> at boot
+  /* Two palettes, not one. A colour picked for paper by daylight has no
+     business being the paper at night — the old single set was written onto
+     <html> as an inline style, which beats both token blocks, so choosing a
+     cream page once left you with a cream page in the dark as well. */
+  palette: { light: {}, dark: {} },
   fontDisplay: 'garamond',
   fontBody: 'inter',
   textScale: 1,
@@ -37,6 +41,22 @@ export const DEFAULT_STATE = {
   settings: DEFAULT_SETTINGS,
 };
 
+/**
+ * A palette in the two-set shape, whatever shape it arrived in.
+ *
+ * A flat palette is what the app saved before there were two, and it applied
+ * to both themes at once. So it is copied into both — anything else would
+ * silently restyle a list somebody had already got the way they wanted it.
+ */
+export function splitPalette(palette) {
+  const p = palette || {};
+  if (p.light || p.dark) {
+    return { light: { ...(p.light || {}) }, dark: { ...(p.dark || {}) } };
+  }
+  const flat = { ...p };
+  return { light: { ...flat }, dark: { ...flat } };
+}
+
 export function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -45,12 +65,15 @@ export function clone(value) {
 export function withDefaults(data) {
   const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
   settings.profile = { ...DEFAULT_SETTINGS.profile, ...(settings.profile || {}) };
-  settings.palette = { ...(settings.palette || {}) };
+  settings.palette = splitPalette(settings.palette);
 
   return {
     ...DEFAULT_STATE,
     ...data,
-    lists: data.lists || [],
+    lists: (data.lists || []).map((list) => ({
+      ...list,
+      palette: splitPalette(list.palette),
+    })),
     settings,
   };
 }
