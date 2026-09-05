@@ -17,6 +17,7 @@ import { __useTestSdk } from '../src/lib/sync.js';
 import { share, myShared, join, invite, setLinkOpen, leave } from '../src/lib/share.js';
 import { openList } from '../src/lib/live.js';
 import { newList, newItem, itemToText } from '../src/lib/list.js';
+import { claimBodyFlag } from '../src/lib/dom.js';
 
 let env;
 const ME = { uid: 'me', name: 'Isabel', email: 'isabel@example.com' };
@@ -40,7 +41,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => { __useTestSdk(null, null); await env?.cleanup(); });
-beforeEach(async () => { await env.clearFirestore(); });
+beforeEach(async () => {
+  await env.clearFirestore();
+  // A leaked flag would hold every delivery in every test after it — which is
+  // precisely how one failing test turned into four.
+  delete document.body.dataset.editing;
+  delete document.body.dataset.sheet;
+});
 
 /** A list as it would be on somebody's table before they shared it. */
 function aList() {
@@ -58,8 +65,8 @@ function aList() {
 function until(check, ms = 5000) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
-    const tick = () => {
-      const value = check();
+    const tick = async () => {
+      const value = await check();
       if (value) return resolve(value);
       if (Date.now() - started > ms) return reject(new Error('timed out waiting'));
       setTimeout(tick, 25);
@@ -237,5 +244,141 @@ describe('both of them writing at once', () => {
     expect(itemToText(s.hers.items.find((i) => i.id === milk.id))).toBe('500 ml milk');
 
     s.myApi.close(); s.annaApi.close();
+  });
+});
+
+describe('what arrives while you are typing', () => {
+  /* The rule that makes editing in place possible at all.
+
+     A snapshot from the other person is delivered by rebuilding the sheet,
+     and a rebuild replaces the node the caret is in — so a word typed while
+     your flatmate adds something would lose its cursor mid-letter. Anything
+     landing while the `editing` flag is up is held, and let through the
+     moment it drops.
+
+     Tested against the real database and the real flag, because the failure
+     is a race and a mock of either would only prove that the code agrees with
+     my own idea of them. */
+  /* Anna writes; I watch. Her view is deliberately not used to check that a
+     write landed — the flag lives on document.body, and in the app that is
+     right (one person, one browser) but here both clients share one document,
+     so raising it holds her screen as well as mine. The database itself is
+     the only honest witness. Waiting on her view instead cost me an afternoon. */
+  async function bothOpen() {
+    beComesTo(ME);
+    const id = await share(aList());
+    await invite(id, ANNA.email);
+
+    beComesTo(ANNA);
+    const annaApi = await openList(id, () => {});
+
+    beComesTo(ME);
+    const seen = [];
+    const myApi = await openList(id, (l) => seen.push(l));
+
+    await until(() => seen.some((l) => l.items.length === 2));
+
+    const onFile = async () => {
+      const db = env.authenticatedContext(ME.uid, { email: ME.email }).firestore();
+      const snap = await firestore.getDocs(firestore.collection(db, 'lists', id, 'items'));
+      return snap.docs.map((d) => d.data().text);
+    };
+    return { id, myApi, annaApi, seen, onFile };
+  }
+
+  it('is held back while a field has focus, and let through on blur', async () => {
+    const s = await bothOpen();
+
+    // I start typing. The real helper, so the real release path is exercised.
+    const field = document.createElement('div');
+    document.body.append(field);
+    const release = claimBodyFlag('editing', field);
+
+    const before = s.seen.length;
+    beComesTo(ANNA);
+    s.annaApi.addItem(s.id, 'bread');
+
+    // It really did go up — asked of the database, not of her held screen.
+    await until(async () => (await s.onFile()).includes('bread'));
+
+    // Mine has not been rebuilt under my cursor.
+    expect(s.seen.length, 'the sheet was rebuilt while a field had focus').toBe(before);
+
+    // I stop typing.
+    release();
+    await until(() => s.seen.some((l) => l.items.some((i) => i.text === 'bread')));
+
+    field.remove();
+    s.myApi.close();
+    s.annaApi.close();
+  });
+
+  it('only the last state is delivered, not every one that piled up', async () => {
+    const s = await bothOpen();
+
+    const field = document.createElement('div');
+    document.body.append(field);
+    const release = claimBodyFlag('editing', field);
+
+    const before = s.seen.length;
+    beComesTo(ANNA);
+    s.annaApi.addItem(s.id, 'bread');
+    s.annaApi.addItem(s.id, 'olives');
+    s.annaApi.addItem(s.id, 'butter');
+    await until(async () => (await s.onFile()).length === 5);
+
+    expect(s.seen.length).toBe(before);
+    release();
+
+    // One repaint carrying all three, rather than three repaints in a row:
+    // the first thing delivered after the flag drops already has everything.
+    await until(() => s.seen.length > before);
+    expect(s.seen[before].items).toHaveLength(5);
+
+    field.remove();
+    s.myApi.close();
+    s.annaApi.close();
+  });
+
+  /* Somebody else's flag going up and down is not my cue. */
+  it('a flag released by another view does not let it through early', async () => {
+    const s = await bothOpen();
+
+    const field = document.createElement('div');
+    document.body.append(field);
+    const release = claimBodyFlag('editing', field);
+
+    const other = document.createElement('div');
+    document.body.append(other);
+    const releaseOther = claimBodyFlag('sheet', other);
+
+    const before = s.seen.length;
+    beComesTo(ANNA);
+    s.annaApi.addItem(s.id, 'bread');
+    await until(async () => (await s.onFile()).includes('bread'));
+
+    releaseOther();
+    await new Promise((r) => setTimeout(r, 150));
+    expect(s.seen.length, 'a different flag released it').toBe(before);
+
+    release();
+    await until(() => s.seen.some((l) => l.items.some((i) => i.text === 'bread')));
+
+    field.remove(); other.remove();
+    s.myApi.close();
+    s.annaApi.close();
+  });
+
+  it('nothing is held when nobody is typing', async () => {
+    const s = await bothOpen();
+    const before = s.seen.length;
+
+    beComesTo(ANNA);
+    s.annaApi.addItem(s.id, 'bread');
+
+    await until(() => s.seen.some((l) => l.items.some((i) => i.text === 'bread')));
+
+    s.myApi.close();
+    s.annaApi.close();
   });
 });
