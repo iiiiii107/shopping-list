@@ -50,6 +50,13 @@ async function seed() {
 
   await store.init();
   store.state.lists = [];
+  /* Settings survive store.init() — they are loaded, not rebuilt — so a test
+     that arranges the table or names the cook leaves that behind for the next
+     one. This passed locally and failed in CI, which is exactly what leaked
+     state does: it depends on what ran before it and on what is left in
+     storage. */
+  store.state.settings.tableOrder = {};
+  store.state.settings.profile = { name: '', email: '' };
 
   const list = store.addList({ title: 'Weekly shop', subtitle: 'for the flat', store: 'Billa' });
   const fruit = newSection({ label: 'Fruit', order: 1000 });
