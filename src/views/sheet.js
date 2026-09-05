@@ -3,7 +3,7 @@ import {
   checkSvg, strikeSvg, hashUnit, claimBodyFlag,
 } from '../lib/dom.js';
 import { store } from '../lib/store.js';
-import { readingOrder, progressOf, itemToText, retextItem } from '../lib/list.js';
+import { readingOrder, progressOf, itemToText, retextItem, sortedSections } from '../lib/list.js';
 import { layout, keepLaidOut } from '../lib/pages.js';
 import { keepAwake } from '../lib/awake.js';
 import { importDialog, shareList, sendSection } from './transfer.js';
@@ -14,6 +14,7 @@ import { watchPresence } from '../lib/presence.js';
 import { currentAccount, syncConfigured, authSettled } from '../lib/sync.js';
 import { shareDialog, whoElse } from './share-ui.js';
 import { destroy, leave } from '../lib/share.js';
+import { draggableRow } from '../lib/reorder.js';
 
 /* One list, as a single sheet of paper.
 
@@ -275,7 +276,20 @@ function body(list, shopping, api) {
 }
 
 function sectionHead(list, section, shopping, api) {
-  return el('div', { class: 'section-head', dataset: { section: section.id } }, [
+  const node = el('div', {
+    class: 'section-head',
+    dataset: { section: section.id, reorder: section.id },
+  }, [
+    /* A heading is the one thing on a list that is genuinely awkward to
+       retype: moving "Fruit and veg" and the six things under it by hand
+       means retyping all seven. Everything under it follows because an item
+       points at its heading rather than sitting inside it. */
+    !shopping && el('button', {
+      class: 'grip',
+      type: 'button',
+      title: `Drag to move “${section.label}” and everything under it`,
+      'aria-label': `Move ${section.label}`,
+    }, [icon('grip')]),
     editable('h2', {
       class: 'section-label',
       value: section.label,
@@ -285,6 +299,7 @@ function sectionHead(list, section, shopping, api) {
     }),
     !shopping && el('button', {
       class: 'btn btn-quiet btn-sm', type: 'button', text: 'send',
+      dataset: { role: 'send' },
       title: `Send just what is under “${section.label}”`,
       onClick: () => sendSection(list, section.id, section.label),
     }),
@@ -294,6 +309,21 @@ function sectionHead(list, section, shopping, api) {
       onClick: () => api.removeSection(list.id, section.id),
     }),
   ]);
+
+  const grip = node.querySelector('.grip');
+  if (grip) {
+    draggableRow({
+      handle: grip,
+      node,
+      selector: '.section-head',
+      axis: 'y',
+      id: section.id,
+      list: () => sortedSections(list),
+      onDrop: (id, order) => api.updateSection(list.id, id, { order }),
+    });
+  }
+
+  return node;
 }
 
 function itemRow(list, item, shopping, api) {
@@ -450,14 +480,18 @@ function sheetActions(list, done, api) {
       label: 'Clear crossed off', text: true,
       run: () => api.clearDone(list.id),
     },
+    /* Three actions that were wearing two icons between them. They are three
+       different things and now look like it: people for sharing with a
+       person, an arrow out of the tray for sending a file, an arrow into it
+       for bringing one in. */
     {
-      icon: 'share',
+      icon: 'people',
       label: list.shared ? 'Who is on this list' : 'Share this list with somebody',
       run: () => shareDialog(list, api),
     },
     { icon: 'brush', label: 'How this sheet looks', run: () => paperDialog(list, api) },
-    { icon: 'inbox', label: 'Send this list as a file', run: () => shareList(list) },
-    { icon: 'inbox', label: 'Add a list to this one', run: () => importDialog(list) },
+    { icon: 'share', label: 'Export — send this list as a file', run: () => shareList(list) },
+    { icon: 'inbox', label: 'Import — add another list to this one', run: () => importDialog(list) },
     { icon: 'trash', label: 'Throw this list away', run: () => confirmDelete(list, api) },
   ].filter(Boolean);
 }

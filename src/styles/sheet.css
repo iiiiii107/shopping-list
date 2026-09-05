@@ -8,7 +8,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: clamp(14px, 2.5vw, 30px) clamp(12px, 3vw, 34px) 120px;
+  /* Tight to the edges, so the paper gets the room rather than the margin. */
+  /* The bar is a sibling below this, not an overlay, so there is nothing to
+     leave room for down here. */
+  padding: clamp(10px, 1.6vw, 20px) clamp(8px, 1.6vw, 20px) clamp(10px, 1.6vw, 20px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -19,8 +22,11 @@
   /* flex:none, or the column flex parent shrinks the paper below its own
      content and the last few items spill off the bottom edge onto the wood. */
   flex: none;
-  width: min(680px, 100%);
-  min-height: min(880px, 78vh);
+  /* Wider and taller than it was: the paper stopped well short of the window
+     on a big screen, which made the table the subject and the list a stamp in
+     the middle of it. */
+  width: min(820px, 100%);
+  min-height: min(1040px, calc(100vh - 92px));
   color: var(--ink);
 }
 
@@ -491,3 +497,54 @@ body[data-mode='shopping'] .meta-read {
 }
 
 .more-actions { display: grid; gap: 8px; }
+
+/* --- taking hold of a heading ---------------------------------------------- */
+
+.grip {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity .15s ease, color .15s ease;
+  touch-action: none;          /* or the browser scrolls instead of dragging */
+}
+/* Out in the margin, so an invisible handle cannot indent the heading away
+   from the items underneath it — which it did, by its own width. */
+.section-head { position: relative; }
+.section-head .grip {
+  position: absolute;
+  left: -26px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.section-head:hover .grip,
+.section-head:focus-within .grip { opacity: 1; }
+.grip:hover { color: var(--ink); }
+.grip:active { cursor: grabbing; }
+.grip svg { width: 16px; height: 16px; fill: none; stroke: currentColor;
+            stroke-width: 2.4; stroke-linecap: round; }
+
+/* Lifted off the page while it is being moved. The transform is written
+   inline by the drag, so nothing here may set one. */
+.is-lifting {
+  position: relative;
+  z-index: 40;
+  opacity: .85;
+  box-shadow: 0 10px 24px -12px var(--shadow-2);
+  cursor: grabbing;
+  transition: none;
+}
+
+/* Where it will land. */
+.drop-before { box-shadow: inset 0 3px 0 -1px var(--accent); }
+.drop-after { box-shadow: inset 0 -3px 0 -1px var(--accent); }
+
+/* Nothing selects text while something is being dragged across it. */
+body.is-reordering { user-select: none; cursor: grabbing; }

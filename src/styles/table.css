@@ -322,3 +322,28 @@
 }
 .sheet-card.is-invitation .label { color: var(--accent); }
 .sheet-card.is-invitation .count span { color: var(--accent); }
+
+/* --- arranging the table --------------------------------------------------- */
+/* The corner you take hold of to move a sheet. It stays out of the way until
+   the sheet is pointed at, so an untouched table shows no furniture. */
+
+.sheet-card { -webkit-user-select: none; user-select: none; }
+
+.card-grip {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  opacity: 0;
+}
+.sheet-card:hover .card-grip,
+.sheet-card:focus-within .card-grip { opacity: 1; }
+
+/* A sheet on its way somewhere, and the gap it is heading for. */
+/* While lifted the card carries an inline translate from the drag, so its own
+   tilt has to get out of the way rather than overwrite it. */
+.sheet-card.is-lifting { --tilt: 0deg; --nudge: 0px; }
+
+.sheet-card.drop-before,
+.sheet-card.drop-after { box-shadow: none; }
+.sheet-card.drop-before { border-left: 3px solid var(--accent); }
+.sheet-card.drop-after { border-right: 3px solid var(--accent); }

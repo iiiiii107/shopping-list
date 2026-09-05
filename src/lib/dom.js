@@ -218,11 +218,18 @@ const ICONS = {
   chevronRight: 'M9 5l7 7-7 7',
   sparkle: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9ZM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z',
   share: 'M12 3v13M12 3 8 7M12 3l4 4M5 13v6a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-6',
+  // Sharing a list *with people* is a different act from sending a file, and
+  // was wearing the same icon as importing one. Two heads and a shoulder.
+  people: 'M9 11a3.2 3.2 0 1 0 0-6.4A3.2 3.2 0 0 0 9 11ZM2.5 20v-1.2A5 5 0 0 1 7.5 14h3A5 5 0 0 1 15.5 19v1M16 4.9a3.2 3.2 0 0 1 0 6.2M18.5 14.2a5 5 0 0 1 3 4.6V20',
   inbox: 'M12 16V3M12 16l-4-4M12 16l4-4M5 13v6a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-6',
   cart: 'M3 5h2.2l2.1 10.2a1.6 1.6 0 0 0 1.6 1.3h7.7a1.6 1.6 0 0 0 1.6-1.2L20 8.5H6.2M9.5 20.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM16.5 20.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z',
   timer: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 9v4l2.5 2M9 2h6',
   flame: 'M12 22c3.9 0 6.5-2.5 6.5-6 0-4.5-4-6.5-4.5-11-3 2-4 4.5-4 7 0 1.2-.8 2-1.6 1.4C7.6 12.6 7 11.4 7 10c-1 1.4-1.5 3.4-1.5 6 0 3.5 2.6 6 6.5 6Z',
   brush: 'M9.5 14.5 4.6 19.4a2.2 2.2 0 0 0 3.1 3.1l4.9-4.9M9.5 14.5l4.6-4.6 4.5 4.5-4.6 4.6M14.1 9.9l4-4a2.4 2.4 0 0 1 3.4 3.4l-4 4',
+  // Something to take hold of. Two columns of dots, as on every drag handle
+  // anyone has ever seen — the point is that it is recognised, not that it is
+  // original.
+  grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
   trash: 'M4.5 7h15M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4L18 7',
 };
 

@@ -1,6 +1,7 @@
 import { el, add, icon, iconButton, iconLink, modal, hashUnit, chefName, toast } from '../lib/dom.js';
 import { store } from '../lib/store.js';
-import { sortLists, progressOf, readingOrder, itemToText } from '../lib/list.js';
+import { sortLists, placeAll, progressOf, readingOrder, itemToText } from '../lib/list.js';
+import { draggableRow } from '../lib/reorder.js';
 import { PAPER_STOCKS } from '../lib/theme.js';
 import { importDialog } from './transfer.js';
 import { fromCookbookDialog } from './from-cookbook.js';
@@ -48,11 +49,16 @@ function followShared() {
 // Signing in or out changes whose lists these are.
 onAccountChange(followShared);
 
+/* What is on the table right now, in the order it is lying in — the drag
+   needs to know its neighbours to work out where something has been dropped. */
+let visible = [];
+
 export function renderTable(scene) {
   followShared();
 
   const own = store.state.lists;
-  const lists = sortLists([...own, ...sharedCache.mine]);
+  const lists = sortLists([...own, ...sharedCache.mine], store.state.settings.tableOrder);
+  visible = lists;
 
   add(scene, head(), lists.length || sharedCache.invitations.length
     ? el('div', { class: 'sheets' }, [
@@ -68,7 +74,7 @@ function head() {
     el('span', { class: 'greeting', text: greeting() }),
     el('div', { class: 'table-actions' }, [
       iconButton('book', 'Build a list from your cookbook', { onClick: fromCookbookDialog }),
-      iconButton('inbox', 'Bring in a list', { onClick: importList }),
+      iconButton('inbox', 'Import — bring in a list', { onClick: importList }),
       iconButton('plus', 'New list', { primary: true, onClick: () => newListDialog() }),
       iconLink('settings', 'Settings', '#/settings'),
     ]),
@@ -134,11 +140,17 @@ function card(list) {
     .flatMap((group) => group.items)
     .slice(0, 5);
 
-  const node = el('button', {
+  const node = el('div', {
     class: 'sheet-card',
-    type: 'button',
+    role: 'button',
+    tabindex: '0',
     style: `--tilt:${tilt.toFixed(2)}deg; --nudge:${nudge.toFixed(1)}px; --sheet-tag:${tag}`,
-    dataset: { paper: list.paper || 'plain' },
+    dataset: { paper: list.paper || 'plain', reorder: list.id },
+    onKeydown: (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      location.hash = list.shared ? `#/list/${list.id}?shared=1` : `#/list/${list.id}`;
+    },
     onClick: () => {
       location.hash = list.shared ? `#/list/${list.id}?shared=1` : `#/list/${list.id}`;
     },
@@ -153,7 +165,41 @@ function card(list) {
       el('span', { text: total ? `${done}/${total}` : 'empty' }),
       list.shared && el('span', { class: 'shared-mark', text: 'shared' }),
     ]),
+    /* Take hold of the corner to move a sheet about. Which sheet sits where
+       is a personal arrangement, so it is kept in your settings and never
+       written onto a shared list — tidying your own table has no business
+       rearranging anybody else's. */
+    el('button', {
+      class: 'grip card-grip',
+      type: 'button',
+      title: `Drag to move “${list.title}”`,
+      'aria-label': `Move ${list.title}`,
+    }, [icon('grip')]),
   ]);
+
+  draggableRow({
+    handle: node.querySelector('.card-grip'),
+    node,
+    selector: '.sheet-card',
+    axis: 'x',
+    id: list.id,
+    list: () => visible,
+    orderOf: (row) => {
+      const map = store.state.settings.tableOrder || {};
+      // Before the first move nothing has a place, so where a sheet is lying
+      // now IS its order — which is also exactly what placeAll writes.
+      return map[row.id] ?? (visible.findIndex((l) => l.id === row.id) + 1) * 1000;
+    },
+    onDrop: (id, order) => {
+      const settings = store.state.settings;
+      // The first move gives every sheet a place, so the table is never half
+      // arranged by hand and half by date, shuffling under you.
+      const base = Object.keys(settings.tableOrder || {}).length
+        ? settings.tableOrder
+        : placeAll(visible);
+      store.updateSettings({ tableOrder: { ...base, [id]: order } });
+    },
+  });
 
   return node;
 }

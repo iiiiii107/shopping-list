@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   newList, newItem, newSection, orderBetween, orderAtEnd,
   readingOrder, itemsInSection, itemToText, retextItem, progressOf,
+  sortLists, placeAll,
 } from './list.js';
 
 describe('the factories keep what they are given', () => {
@@ -182,5 +183,47 @@ describe('a line survives being written, read and rewritten', () => {
     const next = retextItem(item, 'flour');
     expect(next.qty).toBeNull();
     expect(next.unit).toBe('');
+  });
+});
+
+describe('arranging the table by hand', () => {
+  const table = () => ([
+    { id: 'a', title: 'Weekly shop', updatedAt: '2026-09-05' },
+    { id: 'b', title: 'Party', updatedAt: '2026-09-04' },
+    { id: 'c', title: 'Hardware', updatedAt: '2026-09-03' },
+  ]);
+
+  it('an untouched table is most recently used first', () => {
+    expect(sortLists(table(), {}).map((l) => l.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('once arranged, it stays arranged', () => {
+    const order = { a: 3000, b: 1000, c: 2000 };
+    expect(sortLists(table(), order).map((l) => l.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  /* Half by hand and half by date would shuffle sheets under you the moment
+     one of them was touched — so the first move gives every sheet a place. */
+  it('placing them all keeps the order they are lying in', () => {
+    const placed = placeAll(sortLists(table(), {}));
+    expect(placed).toEqual({ a: 1000, b: 2000, c: 3000 });
+    expect(sortLists(table(), placed).map((l) => l.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('a sheet dropped at the front goes to the front and stays', () => {
+    const placed = placeAll(sortLists(table(), {}));
+    const moved = { ...placed, c: orderBetween(null, { order: placed.a }) };
+    expect(sortLists(table(), moved).map((l) => l.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('and one dropped between two lands between them', () => {
+    const placed = placeAll(sortLists(table(), {}));
+    const moved = { ...placed, c: orderBetween({ order: placed.a }, { order: placed.b }) };
+    expect(sortLists(table(), moved).map((l) => l.id)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('a list with no place yet does not vanish', () => {
+    const order = { a: 1000, b: 2000 };
+    expect(sortLists(table(), order).map((l) => l.id)).toHaveLength(3);
   });
 });

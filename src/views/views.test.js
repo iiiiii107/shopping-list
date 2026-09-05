@@ -170,7 +170,7 @@ describe('sending a list and bringing one in', () => {
 
     const { renderTable } = await import('./table.js');
     renderTable(host);
-    host.querySelector('[aria-label="Bring in a list"]').click();
+    host.querySelector('[aria-label="Import — bring in a list"]').click();
     await Promise.resolve();
 
     const paste = document.querySelector('.md-paste');
@@ -195,7 +195,7 @@ describe('sending a list and bringing one in', () => {
 
     const { renderSheet } = await import('./sheet.js');
     renderSheet(host, list.id);
-    host.querySelector('[aria-label="Add a list to this one"]').click();
+    host.querySelector('[aria-label="Import — add another list to this one"]').click();
     await Promise.resolve();
 
     document.querySelector('.md-paste').value = '## Freezer\n- [ ] peas';
@@ -217,7 +217,7 @@ describe('sending a list and bringing one in', () => {
 
     const { renderTable } = await import('./table.js');
     renderTable(host);
-    host.querySelector('[aria-label="Bring in a list"]').click();
+    host.querySelector('[aria-label="Import — bring in a list"]').click();
     await Promise.resolve();
 
     document.querySelector('.md-paste').value = '# Just a title\n\n---\n';
@@ -236,7 +236,7 @@ describe('sending a list and bringing one in', () => {
     const { renderSheet } = await import('./sheet.js');
     renderSheet(host, list.id);
 
-    host.querySelector('[aria-label="Send this list as a file"]').click();
+    host.querySelector('[aria-label="Export — send this list as a file"]').click();
     await new Promise((r) => setTimeout(r, 0));
 
     const preview = document.querySelector('.md-preview');
@@ -244,6 +244,108 @@ describe('sending a list and bringing one in', () => {
     expect(preview.value).toContain('# Weekly shop');
     expect(preview.value).toContain('- [ ] 250 ml milk');
     expect(handlerErrors).toEqual([]);
+  });
+});
+
+describe('moving things about', () => {
+  /* The drag is driven by pointer events on the handle and by asking what is
+     under the cursor, so it is exercised the same way here — a mock of either
+     would only prove the code agrees with my idea of them. */
+  function dragOnto(fromEl, toEl, { before: dropBefore, handle }) {
+    const grip = fromEl.querySelector(handle);
+    const g = grip.getBoundingClientRect();
+    const t = toEl.getBoundingClientRect();
+    const x = dropBefore ? t.left + 2 : t.right - 2;
+    const y = dropBefore ? t.top + 2 : t.bottom - 2;
+
+    const fire = (type, cx, cy, target) => target.dispatchEvent(new window.PointerEvent(type, {
+      bubbles: true, cancelable: true, clientX: cx, clientY: cy, pointerId: 1, button: 0, buttons: 1,
+    }));
+    fire('pointerdown', g.left + 5, g.top + 5, grip);
+    fire('pointermove', x, y, window);
+    fire('pointermove', x, y, window);
+    fire('pointerup', x, y, window);
+  }
+
+  /* jsdom lays nothing out, so every rectangle is the same and "what is under
+     the cursor" is meaningless. Both are stubbed per element so the drag has
+     something real to reason about. */
+  function place(el, rect) {
+    el.getBoundingClientRect = () => ({
+      left: rect.x, right: rect.x + rect.w, top: rect.y, bottom: rect.y + rect.h,
+      width: rect.w, height: rect.h, x: rect.x, y: rect.y,
+    });
+  }
+
+  function underPointerIsWhicheverBoxContains(boxes) {
+    document.elementFromPoint = (x, y) => boxes.find(({ el }) => {
+      const b = el.getBoundingClientRect();
+      return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
+    })?.el || null;
+  }
+
+  it('a heading can be dragged above another, and takes its items with it', async () => {
+    const { store, list } = await seed();
+    const second = store.addSection(list.id, 'Freezer');
+    store.addItem(list.id, 'peas', second.id);
+
+    const { renderSheet } = await import('./sheet.js');
+    renderSheet(host, list.id);
+
+    const heads = [...host.querySelectorAll('.section-head')];
+    expect(heads).toHaveLength(2);
+    place(heads[0], { x: 0, y: 100, w: 400, h: 40 });
+    place(heads[1], { x: 0, y: 300, w: 400, h: 40 });
+    underPointerIsWhicheverBoxContains(heads.map((el) => ({ el })));
+
+    // Freezer, dropped above Fruit.
+    dragOnto(heads[1], heads[0], { before: true, handle: '.grip' });
+    await Promise.resolve();
+
+    const after = store.listById(list.id);
+    const order = [...after.sections].sort((a, b) => a.order - b.order).map((x) => x.label);
+    expect(order).toEqual(['Freezer', 'Fruit']);
+    // The items point at their heading, so they came along without being touched.
+    expect(after.items.find((i) => i.text === 'peas').sectionId).toBe(second.id);
+    expect(handlerErrors).toEqual([]);
+  });
+
+  it('a sheet can be dragged along the table, and stays where it is put', async () => {
+    const { store } = await seed();
+    const { renderTable } = await import('./table.js');
+    renderTable(host);
+
+    const cards = [...host.querySelectorAll('.sheet-card')];
+    expect(cards.length).toBeGreaterThan(1);
+    const before = cards.map((c) => c.dataset.reorder);
+
+    place(cards[0], { x: 0, y: 0, w: 200, h: 240 });
+    place(cards[1], { x: 240, y: 0, w: 200, h: 240 });
+    underPointerIsWhicheverBoxContains(cards.map((el) => ({ el })));
+
+    // The second sheet, dropped to the left of the first.
+    dragOnto(cards[1], cards[0], { before: true, handle: '.card-grip' });
+    await Promise.resolve();
+
+    const order = store.state.settings.tableOrder;
+    expect(Object.keys(order).length, 'every sheet should be given a place').toBe(before.length);
+    expect(order[before[1]]).toBeLessThan(order[before[0]]);
+    expect(handlerErrors).toEqual([]);
+  });
+
+  it('dropping a sheet back where it already was changes nothing', async () => {
+    const { store } = await seed();
+    const { renderTable } = await import('./table.js');
+    renderTable(host);
+
+    const cards = [...host.querySelectorAll('.sheet-card')];
+    place(cards[0], { x: 0, y: 0, w: 200, h: 240 });
+    place(cards[1], { x: 240, y: 0, w: 200, h: 240 });
+    underPointerIsWhicheverBoxContains(cards.map((el) => ({ el })));
+
+    dragOnto(cards[0], cards[0], { before: true, handle: '.card-grip' });
+    await Promise.resolve();
+    expect(store.state.settings.tableOrder).toEqual({});
   });
 });
 

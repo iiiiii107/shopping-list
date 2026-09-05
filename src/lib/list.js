@@ -181,7 +181,30 @@ export const SORT_MODES = [
   { id: 'left', label: 'Left to find' },
 ];
 
-/** Lists on the table, newest first — the order the sheets are laid out in. */
-export function sortLists(lists) {
-  return [...lists].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+/**
+ * The sheets in the order they lie on the table.
+ *
+ * However you last arranged them, if you have arranged them; otherwise the
+ * most recently touched first, which is the sensible thing for a table nobody
+ * has tidied. The two are not mixed: the moment one list is moved by hand,
+ * every list is given a place, so there is never a table half sorted by hand
+ * and half by date, which would move things under you.
+ */
+export function sortLists(lists, order = {}) {
+  const placed = lists.some((l) => order[l.id] != null);
+
+  return [...lists].sort((a, b) => {
+    if (placed) {
+      const diff = (order[a.id] ?? 0) - (order[b.id] ?? 0);
+      if (diff !== 0) return diff;
+    }
+    return String(b.updatedAt).localeCompare(String(a.updatedAt));
+  });
+}
+
+/** Give every sheet a place, keeping the order they are lying in now. */
+export function placeAll(lists) {
+  const out = {};
+  lists.forEach((list, i) => { out[list.id] = (i + 1) * 1000; });
+  return out;
 }

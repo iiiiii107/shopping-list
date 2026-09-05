@@ -22,6 +22,10 @@ export const PAGED_ABOVE = 900;
 
 const RATIO = Math.SQRT2;   // A4: the long side over the short one
 const GAP = 26;             // bare table showing between two sheets
+/* The bar along the foot (57), the table showing above the paper (20), and a
+   hair below it. Measured rather than guessed: the first attempt left 55px of
+   bare wood under every page for no reason. */
+const CHROME = 92;
 
 /**
  * Lay a sheet out, in pages or as one strip, and keep the drawn pages in step
@@ -37,7 +41,10 @@ export function layout(sheet, meta = {}) {
 
   if (window.innerWidth < PAGED_ABOVE) return single(sheet, flow, layer);
 
-  const pageH = Math.min(880, Math.round(window.innerHeight * 0.76));
+  /* As much of the window as the paper can have. What is left is the bar at
+     the foot and a margin of table around the edges — enough to read as paper
+     lying on wood rather than as a document viewer, and no more. */
+  const pageH = Math.max(420, Math.min(1040, window.innerHeight - CHROME));
   const pageW = Math.round(pageH / RATIO);
   const pad = Math.round(pageW * 0.085);
 

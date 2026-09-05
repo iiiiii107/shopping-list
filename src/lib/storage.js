@@ -30,6 +30,13 @@ export const DEFAULT_SETTINGS = {
   fontDisplay: 'garamond',
   fontBody: 'inter',
   textScale: 1,
+  /* How the sheets are laid out on the table, as { listId: order }.
+
+     In settings rather than on the lists themselves because it has to cover
+     shared ones too, and where a list sits on *your* table is nobody else's
+     business — writing it onto the shared document would rearrange everybody
+     else's table every time you tidied your own. */
+  tableOrder: {},
   // Where the door at the bottom-left goes. Kept in settings rather than
   // hard-coded so a local copy of the cookbook can be pointed at instead.
   cookbookUrl: 'https://iiiiii107.github.io/cook-book/',
@@ -66,6 +73,7 @@ export function withDefaults(data) {
   const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
   settings.profile = { ...DEFAULT_SETTINGS.profile, ...(settings.profile || {}) };
   settings.palette = splitPalette(settings.palette);
+  settings.tableOrder = { ...(settings.tableOrder || {}) };
 
   return {
     ...DEFAULT_STATE,
