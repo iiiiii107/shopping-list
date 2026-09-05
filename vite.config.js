@@ -67,5 +67,15 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.js'],
+    /* No Firebase config, always.
+
+       Vite hands .env.local to the tests, so whether sync looked configured
+       depended on whether the developer happened to have one — the app then
+       waits for an account that never arrives, and a list it cannot find
+       reads as "opening…" rather than "not here any more". It passed in CI,
+       where there is no such file, and failed here. Tests that behave
+       differently on two machines are worse than no tests. The ones that
+       need a database inject their own (see src/lib/sync.js __useTestSdk). */
+    env: { VITE_FIREBASE_CONFIG: '' },
   },
 });
