@@ -60,7 +60,7 @@ function offerToShare(list) {
     title: `Share “${list.title}”`,
     body: el('div', {}, [
       el('p', { text: 'The list moves out of this browser and onto the two of you. You will both see the same one, live — items appear as they are written and crossings-out as they happen.' }),
-      el('p', { class: 'note', text: 'It stays yours: only you can invite anyone else, or throw it away.' }),
+      el('p', { class: 'note', text: 'It stays yours: only you can let anyone else on, or throw it away. You send them the link yourself — nothing is emailed.' }),
       status,
     ]),
     actions: [
@@ -125,14 +125,17 @@ function manage(list, api) {
             try {
               await invite(list.id, value);
               email.value = '';
-              toast('Invited. Send them the link and they can open it.');
+              // Said plainly, because the first version implied an email had
+              // gone out and none had — the person waited for a message that
+              // was never coming.
+              toast('Added. Now send them the link — nothing is emailed.');
             } catch {
               toast('That did not work.');
             }
           },
         }),
       ]),
-      el('p', { class: 'note', text: 'Only that Google account can open the list. Knowing the link is not enough.' }),
+      el('p', { class: 'note', text: 'Nothing is emailed — there is no server here to send it. Inviting them makes the list openable by that Google account; you still have to send them the link yourself, below.' }),
     ]));
 
     const open = el('input', { type: 'checkbox', checked: !!list.linkOpen });
@@ -152,16 +155,16 @@ function manage(list, api) {
 
   const link = linkTo(list.id);
   const field = el('input', { type: 'text', value: link, readonly: true, 'aria-label': 'The link to this list' });
-  add(body, el('div', { class: 'field' }, [
-    el('label', { class: 'label', text: 'The link' }),
+  add(body, el('div', { class: 'field share-link' }, [
+    el('label', { class: 'label', text: 'Send them this' }),
     el('div', { class: 'row' }, [
       field,
       el('button', {
-        class: 'btn btn-secondary', type: 'button', text: 'Copy',
+        class: 'btn', type: 'button', text: 'Copy link',
         onClick: async () => {
           try {
             await navigator.clipboard.writeText(link);
-            toast('Copied.');
+            toast('Copied. Send it however you like.');
           } catch {
             field.select();
             toast('Press copy — the link is selected.');
@@ -169,6 +172,7 @@ function manage(list, api) {
         },
       }),
     ]),
+    el('p', { class: 'note', text: 'However you send it — a message, a note on the fridge. Whoever you invited can open it; nobody else can unless the switch above is on.' }),
   ]));
 
   return modal({ title: `“${list.title}”`, body, actions: [{ label: 'Done', class: 'btn' }] });

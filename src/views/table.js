@@ -4,7 +4,7 @@ import { sortLists, progressOf, readingOrder, itemToText } from '../lib/list.js'
 import { PAPER_STOCKS } from '../lib/theme.js';
 import { importDialog } from './transfer.js';
 import { fromCookbookDialog } from './from-cookbook.js';
-import { myShared, join } from '../lib/share.js';
+import { watchShared, join } from '../lib/share.js';
 import { currentAccount, syncConfigured, onAccountChange } from '../lib/sync.js';
 
 /* The table: every list you have, lying about as sheets of paper.
@@ -13,29 +13,44 @@ import { currentAccount, syncConfigured, onAccountChange } from '../lib/sync.js'
    the arrangement is the same every time you open the app. Paper that shuffles
    itself on each reload reads as a bug, not as charm. */
 
-/* Shared lists do not live in the local store, so they arrive separately and
-   a moment later. Held here rather than re-fetched on every render: the table
-   is drawn again on every keystroke elsewhere in the app, and a query per
-   keystroke would be both slow and rude. */
-let sharedCache = { mine: [], invitations: [] };
-let fetching = null;
+/* Shared lists do not live in the local store, so they arrive separately.
 
-function refreshShared(onDone) {
-  if (!syncConfigured() || !currentAccount()) {
-    sharedCache = { mine: [], invitations: [] };
-    return;
-  }
-  if (fetching) return;
-  fetching = myShared()
-    .then((next) => { sharedCache = next; onDone?.(); })
-    .catch((err) => console.warn('Could not look up your shared lists.', err))
-    .finally(() => { fetching = null; });
+   A subscription, not a fetch. The first version fetched them at the end of
+   every render and re-rendered when the answer came back — which rendered,
+   which fetched, which re-rendered, forever, two Firestore queries a turn.
+   Subscribing has no such loop in it, and a list somebody shares with you
+   while you are looking at the table simply appears. */
+let sharedCache = { mine: [], invitations: [] };
+let watchingFor = null;
+let stopWatching = null;
+
+function followShared() {
+  const uid = currentAccount()?.uid || null;
+  if (uid === watchingFor) return;
+
+  stopWatching?.();
+  stopWatching = null;
+  watchingFor = uid;
+  sharedCache = { mine: [], invitations: [] };
+  if (!uid || !syncConfigured()) return;
+
+  watchShared((next) => {
+    sharedCache = next;
+    // Only disturb the screen if the table is still what is on it.
+    if (document.body.dataset.view === 'table') store.emit();
+  }).then((stop) => {
+    // Signed out again while the subscription was being set up.
+    if (watchingFor !== uid) return stop();
+    stopWatching = stop;
+  }).catch((err) => console.warn('Could not follow your shared lists.', err));
 }
 
-// Signing in or out changes what there is to fetch.
-onAccountChange(() => { sharedCache = { mine: [], invitations: [] }; });
+// Signing in or out changes whose lists these are.
+onAccountChange(followShared);
 
 export function renderTable(scene) {
+  followShared();
+
   const own = store.state.lists;
   const lists = sortLists([...own, ...sharedCache.mine]);
 
@@ -45,13 +60,6 @@ export function renderTable(scene) {
         ...lists.map(card),
       ])
     : empty());
-
-  /* Re-render once they arrive, but only if this table is still the thing on
-     screen — otherwise a slow query would tear down whatever you opened while
-     you were waiting for it. */
-  refreshShared(() => {
-    if (document.body.dataset.view === 'table') store.emit();
-  });
 }
 
 function head() {

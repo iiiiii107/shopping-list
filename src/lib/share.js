@@ -25,8 +25,16 @@ export async function share(list) {
   const { firestore: f, db } = await firebase();
   const ref = f.doc(f.collection(db, 'lists'));
 
-  const batch = f.writeBatch(db);
-  batch.set(ref, {
+  /* The list first, on its own, and only then the items.
+
+     They cannot go in one batch, and this is the bug that made sharing fail
+     outright the first time somebody tried it. An item's rule asks whether
+     you may use the list it belongs to, by `get`ting the list document — and
+     rules for a batched write are evaluated against the database as it was
+     BEFORE the batch, where the list does not exist yet. So the get returned
+     nothing, the item write was denied, and the whole batch with it. Every
+     share was refused at the first step. */
+  await f.setDoc(ref, {
     ...headerOf(list),
     owner: me.uid,
     members: [me.uid],
@@ -35,12 +43,66 @@ export async function share(list) {
     createdAt: f.serverTimestamp(),
     updatedAt: f.serverTimestamp(),
   });
-  for (const item of list.items || []) {
-    const { id, ...rest } = item;
-    batch.set(f.doc(f.collection(ref, 'items'), id), rest);
+
+  const items = list.items || [];
+  if (items.length) {
+    const batch = f.writeBatch(db);
+    for (const item of items) {
+      const { id, ...rest } = item;
+      batch.set(f.doc(f.collection(ref, 'items'), id), rest);
+    }
+    await batch.commit();
   }
-  await batch.commit();
   return ref.id;
+}
+
+/**
+ * The lists you are on and the ones waiting for you, kept up to date.
+ *
+ * Two live queries rather than a fetch, because a fetch has to be triggered by
+ * something — and the something the table first used was its own render, which
+ * then re-rendered on the answer and fetched again, forever. A subscription
+ * has no such loop in it, and it also means a list somebody shares with you
+ * while you are looking at the table simply appears.
+ *
+ * @returns {Promise<() => void>} the way to stop
+ */
+export async function watchShared(onChange) {
+  const me = currentAccount();
+  if (!me) { onChange({ mine: [], invitations: [] }); return () => {}; }
+
+  const { firestore: f, db } = await firebase();
+  const lists = f.collection(db, 'lists');
+
+  let mine = [];
+  let waiting = [];
+  const deliver = () => {
+    const ids = new Set(mine.map((l) => l.id));
+    onChange({
+      mine,
+      // Not the ones already accepted: an invitation you took up should stop
+      // offering itself.
+      invitations: waiting.filter((l) => !ids.has(l.id)),
+    });
+  };
+
+  const rows = (snap) => snap.docs.map((d) => ({ id: d.id, shared: true, ...d.data() }));
+
+  const stopMine = f.onSnapshot(
+    f.query(lists, f.where('members', 'array-contains', me.uid)),
+    (snap) => { mine = rows(snap); deliver(); },
+    (err) => console.warn('Could not follow your shared lists.', err),
+  );
+
+  const stopWaiting = me.email
+    ? f.onSnapshot(
+        f.query(lists, f.where('invited', 'array-contains', me.email)),
+        (snap) => { waiting = rows(snap); deliver(); },
+        (err) => console.warn('Could not follow your invitations.', err),
+      )
+    : () => {};
+
+  return () => { stopMine(); stopWaiting(); };
 }
 
 /** The lists you are on, and the ones waiting for you to accept. */

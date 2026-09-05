@@ -31,12 +31,28 @@ const config = readConfig();
 
 /** True when the site was built with a Firebase project attached. */
 export function syncConfigured() {
-  return config !== null;
+  return config !== null || testSdk !== null;
 }
 
 let sdk = null;
 
+/* A seam for the tests, and the reason it exists is worth writing down.
+
+   Sharing shipped broken. Every unit test passed, the rules were proved in
+   the emulator, and the feature still did not work for the second person —
+   because nothing had ever run share(), myShared(), join() and openList()
+   against a real database as two different people. The seam lets the
+   integration test do exactly that. */
+let testSdk = null;
+
+export function __useTestSdk(next, account = null) {
+  testSdk = next;
+  currentUser = account;
+  settled = true;
+}
+
 export async function firebase() {
+  if (testSdk) return testSdk;
   if (!config) throw new Error('Sync is not set up for this site.');
   if (sdk) return sdk;
 
@@ -76,6 +92,17 @@ let lastError = null;
 /** The signed-in user, or null. Only ever id, name, email and photo. */
 export function currentAccount() {
   return currentUser;
+}
+
+/* Whether Firebase has said yet whether anyone is signed in.
+
+   Between the page loading and that answer arriving there is a second or so
+   where currentAccount() is null and means "we do not know", not "nobody" —
+   and opening a shared link lands squarely in it. Without this the link told
+   people who were perfectly well signed in to go and sign in. */
+let settled = false;
+export function authSettled() {
+  return settled || !config;
 }
 
 /** Why sync is not working, in words worth showing someone. Null when fine. */
@@ -121,6 +148,7 @@ export async function restoreSession() {
   }
 
   auth.onAuthStateChanged(authInstance, async (user) => {
+    settled = true;
     if (user) {
       currentUser = {
         uid: user.uid, name: user.displayName, email: user.email, photo: user.photoURL,

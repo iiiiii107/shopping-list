@@ -411,3 +411,7 @@ button:focus-visible,
 
 .share-manage .row input[type='text'],
 .share-manage .row input[type='email'] { flex: 1; }
+
+/* The link is the thing that actually gets somebody onto a list — nothing is
+   emailed — so it is given the room to say so. */
+.share-link { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hair); }

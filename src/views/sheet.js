@@ -11,7 +11,7 @@ import { PAPER_STOCKS, PALETTE_KEYS, applySheetPalette } from '../lib/theme.js';
 import { paletteEditor } from './palette.js';
 import { openList } from '../lib/live.js';
 import { watchPresence } from '../lib/presence.js';
-import { currentAccount, syncConfigured } from '../lib/sync.js';
+import { currentAccount, syncConfigured, authSettled } from '../lib/sync.js';
 import { shareDialog, whoElse } from './share-ui.js';
 import { destroy, leave } from '../lib/share.js';
 
@@ -42,7 +42,7 @@ export function renderSheet(scene, listId, query = new URLSearchParams()) {
      is the true one. */
   if (!local) {
     const couldBeShared = syncConfigured()
-      && (currentAccount() || query.get('shared') === '1');
+      && (currentAccount() || !authSettled() || query.get('shared') === '1');
     if (couldBeShared) return openShared(scene, listId, query);
 
     add(scene, el('div', { class: 'table-empty' }, [
@@ -72,6 +72,16 @@ const storeApi = {
 /* A shared list arrives over the wire, so the screen has to say something
    while it does — and has to keep repainting as other people write on it. */
 async function openShared(scene, listId, query) {
+  /* Between the page loading and Firebase saying who is signed in there is a
+     second or so where currentAccount() is null and means "we do not know".
+     Opening a shared link lands squarely in it — so without this, following a
+     link told people who were perfectly well signed in to go and sign in. The
+     account resolving re-renders this view a moment later. */
+  if (!authSettled()) {
+    add(scene, el('div', { class: 'table-empty' }, [el('p', { text: 'Opening the list…' })]));
+    return;
+  }
+
   if (!currentAccount()) {
     add(scene, el('div', { class: 'table-empty' }, [
       el('p', { text: 'This is a list somebody shared. Sign in with Google to open it.' }),

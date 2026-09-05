@@ -62,6 +62,11 @@ runs them against the real rules engine in the Firestore emulator. It needs a
 JVM; `brew install openjdk` is enough, and the script puts it on PATH itself
 rather than asking you to edit your shell profile.
 
+`test/collab.test.js` runs the same way, and is the more important of the two:
+it drives the real share, invite, join and live-list code against the real
+database as two different people. Sharing shipped broken past 118 green unit
+tests and 20 green rules tests because nothing had ever done that.
+
 These are worth running before publishing. Writing them turned up four real
 holes in rules that looked right, including a recursive wildcard that silently
 overrode every check above it.
