@@ -1,5 +1,4 @@
 import { firebase, currentAccount } from './sync.js';
-import { newList } from './list.js';
 
 /* Turning a list into one several people hold, and back again.
 
@@ -173,22 +172,6 @@ export async function destroy(listId, items = []) {
   for (const item of items) batch.delete(f.doc(f.collection(ref, 'items'), item.id));
   batch.delete(ref);
   await batch.commit();
-}
-
-/**
- * Bring a shared list back to being your own — what you want when everyone
- * has gone home and you would rather it stopped being a shared thing.
- */
-export function toPrivate(list) {
-  return newList({
-    ...list,
-    id: undefined,
-    shared: false,
-    owner: '',
-    members: [],
-    invited: [],
-    linkOpen: false,
-  });
 }
 
 /** The link that gets somebody to this list. */

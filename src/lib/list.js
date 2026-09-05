@@ -175,12 +175,6 @@ export function retextItem(item, text) {
   };
 }
 
-export const SORT_MODES = [
-  { id: 'added', label: 'As written' },
-  { id: 'alpha', label: 'A to Z' },
-  { id: 'left', label: 'Left to find' },
-];
-
 /**
  * The sheets in the order they lie on the table.
  *
